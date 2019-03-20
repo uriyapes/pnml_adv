@@ -1,0 +1,87 @@
+{
+    "pnml_cifar10": {
+        "batch_size": 128,
+        "num_workers": 4,
+        "freeze_layer": 5,
+        "fit_to_sample": {
+            "epochs": 10,
+            "lr": 0.001,
+            "momentum": 0.9,
+            "step_size": [10],
+            "gamma": 0.1,
+            "weight_decay": 0.0001,
+            "test_start_idx": 0,
+            "test_end_idx": 99
+        }
+    },
+    "random_labels": {
+        "batch_size": 128,
+        "num_workers": 4,
+        "label_corrupt_prob": 1.0,
+        "freeze_layer": 4,
+        "initial_training": {
+            "do_initial_training": true,
+            "pretrained_model_path": "",
+            "epochs": 350,
+            "lr": 0.1,
+            "momentum": 0.9,
+            "step_size": [350],
+            "gamma": 0.1,
+            "weight_decay": 0.0,
+            "acc_goal": 0.9999
+        },
+        "fit_to_sample": {
+            "epochs": 6,
+            "lr": 0.01,
+            "momentum": 0.9,
+            "step_size": [6],
+            "gamma": 0.1,
+            "weight_decay": 0.0,
+            "test_start_idx": 0,
+            "test_end_idx": 299
+        }
+    },
+    "pnml_mnist": {
+        "batch_size": 128,
+        "num_workers": 4,
+        "freeze_layer": 0,
+        "initial_training": {
+            "do_initial_training": true,
+            "pretrained_model_path": "",
+            "epochs": 100,
+            "lr": 0.01,
+            "momentum": 0.9,
+            "step_size": [100],
+            "gamma": 0.1,
+            "weight_decay": 0.0001,
+            "loss_goal": 0.0
+        },
+        "fit_to_sample": {
+            "epochs": 10,
+            "lr": 0.0001,
+            "momentum": 0.9,
+            "step_size": [10],
+            "gamma": 0.1,
+            "weight_decay": 0.0001,
+            "test_start_idx": 0,
+            "test_end_idx": 1000
+        }
+    },
+    "adversarial": {
+        "batch_size": 128,
+        "num_workers": 4,
+        "freeze_layer": 5,
+        "epsilon": 0.001,
+        "fit_to_sample": {
+            "epochs": 10,
+            "lr": 0.001,
+            "momentum": 0.9,
+            "step_size": [10],
+            "gamma": 0.1,
+            "weight_decay": 0.0001,
+            "test_start_idx": 0,
+            "test_end_idx": 99
+        }
+    }
+}
+
