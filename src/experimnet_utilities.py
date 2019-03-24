@@ -1,5 +1,6 @@
 import os
 
+from dataset_utilities import create_adversarial_mnist_dataloaders
 from dataset_utilities import create_adversarial_cifar10_dataloaders
 from dataset_utilities import create_cifar10_dataloaders
 from dataset_utilities import create_cifar10_random_label_dataloaders
@@ -18,7 +19,8 @@ class Experiment:
                             'out_of_dist_svhn',
                             'out_of_dist_noise',
                             'pnml_mnist',
-                            'adversarial']:
+                            'adversarial',
+                            'mnist_adversarial']:
             raise NameError('No experiment type: %s' % type)
         self.params = params
         self.exp_type = exp_type
@@ -37,6 +39,8 @@ class Experiment:
             self.params = self.params['pnml_mnist']
         elif self.exp_type == 'adversarial':
             self.params = self.params['adversarial']
+        elif self.exp_type == 'mnist_adversarial':
+            self.params = self.params['mnist_adversarial']
         else:
             raise NameError('No experiment type: %s' % self.exp_type)
 
@@ -97,7 +101,16 @@ class Experiment:
             dataloaders = {'train': trainloader,
                            'test': testloader,
                            'classes': classes}
-
+        elif self.exp_type == 'mnist_adversarial':
+            trainloader, testloader, classes = create_adversarial_mnist_dataloaders(data_folder,
+                                                                                      os.path.join(
+                                                                                          'data', 'mnist_adversarial_sign'),
+                                                                                      self.params['epsilon'],
+                                                                                      self.params['batch_size'],
+                                                                                      self.params['num_workers'])
+            dataloaders = {'train': trainloader,
+                           'test': testloader,
+                           'classes': classes}
         else:
             raise NameError('No experiment type: %s' % self.exp_type)
 
@@ -117,6 +130,8 @@ class Experiment:
             model = Net()
         elif self.exp_type == 'adversarial':
             model = load_pretrained_resnet20_cifar10_model(resnet20())
+        elif self.exp_type == 'mnist_adversarial':
+            model = Net()
         else:
             raise NameError('No experiment type: %s' % self.exp_type)
 
@@ -136,6 +151,8 @@ class Experiment:
             name = 'pnml_mnist'
         elif self.exp_type == 'adversarial':
             name = 'adversarial'
+        elif self.exp_type == 'mnist_adversarial':
+            name = 'mnist_adversarial'
         else:
             raise NameError('No experiment type: %s' % self.exp_type)
 

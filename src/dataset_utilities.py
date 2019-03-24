@@ -7,7 +7,7 @@ import torch
 from torch.utils import data
 from torchvision import transforms, datasets
 
-from adversarial_utilities import create_adversarial_sign_dataset
+from adversarial_utilities import create_adversarial_sign_dataset, create_adversarial_mnist_sign_dataset
 from noise_dataset_class import NoiseDataset
 
 # Normalization for CIFAR10 dataset
@@ -378,5 +378,81 @@ def create_adversarial_cifar10_dataloaders(data_dir: str = './data',
                                  shuffle=False,
                                  num_workers=num_workers)
     classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
+
+    return trainloader, testloader, classes
+
+
+class MnistAdversarial(datasets.MNIST):
+    """
+    Implementing adversarial attack to CIFAR10 testset.
+    """
+
+    def __init__(self, epsilon=0.05, adversarial_sign_dataset_path='./data/mnist_adversarial_sign', **kwargs):
+        """
+
+        :param epsilon: the strength of the attack. Fast gradient sign attack.
+        :param adversarial_sign_dataset_path: path in which the gradients sign from the back propagation is saved into.
+        :param kwargs: initial init arguments.
+        """
+        super(MnistAdversarial, self).__init__(**kwargs)
+        self.adversarial_sign_dataset_path = adversarial_sign_dataset_path
+        self.epsilon = epsilon
+        for index in range(self.test_data.shape[0]):
+            sign = np.load(os.path.join(self.adversarial_sign_dataset_path, str(index) + '.npy'))
+            # sign = np.transpose(sign, (1, 2, 0)) #This is needed in cifar10 where we have 3 dimension
+            sign = torch.from_numpy(sign).type(torch.uint8)
+            self.test_data[index] = np.clip(self.test_data[index] + (epsilon * 255) * sign, 0, 255)
+
+def create_adversarial_mnist_dataloaders(data_dir: str = './data', adversarial_dir: str = os.path.join('data', 'mnist_adversarial_sign'),
+                                           epsilon: float = 0.5, batch_size: int = 128, num_workers: int = 4):
+    """
+    create train and test pytorch dataloaders for MNIST dataset
+    :param data_dir: the folder that will contain the data
+    :param adversarial_dir: the output dir to which the gradient adversarial sign will be saved.
+    :param epsilon: the additive gradient strength to be added to the image.
+    :param batch_size: the size of the batch for test and train loaders
+    :param num_workers: number of cpu workers which loads the GPU with the dataset
+    :return: train and test loaders along with mapping between labels and class names
+    """
+
+    # Normalization for MNIST dataset
+    normalize_mnist = transforms.Normalize(mean=[0.1307], std=[0.3081])
+    trainset = datasets.MNIST(root=data_dir,
+                              train=True,
+                              download=True,
+                              transform=transforms.Compose([transforms.ToTensor(),
+                                                            normalize_mnist]))
+    trainloader = data.DataLoader(trainset,
+                                  batch_size=batch_size,
+                                  shuffle=False,
+                                  num_workers=num_workers)
+
+    adversarial_sign_dataset_path = create_adversarial_mnist_sign_dataset(data_dir, output_folder=adversarial_dir)
+
+    testset = MnistAdversarial(root=data_dir,
+                                 train=False,
+                                 download=True,
+                                 transform=transforms.Compose([transforms.ToTensor(),
+                                                               normalize_mnist]),
+                                 adversarial_sign_dataset_path=adversarial_sign_dataset_path,
+                                 epsilon=epsilon)
+
+    testloader = data.DataLoader(testset,
+                                 batch_size=batch_size,
+                                 shuffle=False,
+                                 num_workers=num_workers)
+
+
+    # testset = datasets.MNIST(root=data_dir,
+    #                          train=False,
+    #                          download=True,
+    #                          transform=transforms.Compose([transforms.ToTensor(),
+    #                                                        normalize_mnist]))
+    #
+    # testloader = data.DataLoader(testset,
+    #                              batch_size=batch_size,
+    #                              shuffle=False,
+    #                              num_workers=num_workers)
+    classes = ('0', '1', '2', '3', '4', '5', '6', '7', '8', '9')
 
     return trainloader, testloader, classes
