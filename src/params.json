@@ -89,9 +89,9 @@
         "freeze_layer": 5,
         "epsilon": 0.05,
         "initial_training": {
-            "do_initial_training": false,
+            "do_initial_training": true,
             "pretrained_model_path": "./output/pnml_mnist_results_20190323_125525/pnml_mnist_model_0.163129.pt",
-            "epochs": 100,
+            "epochs": 10,
             "lr": 0.01,
             "momentum": 0.9,
             "step_size": [100],

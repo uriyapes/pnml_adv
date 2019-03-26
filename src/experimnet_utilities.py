@@ -104,7 +104,7 @@ class Experiment:
         elif self.exp_type == 'mnist_adversarial':
             trainloader, testloader, classes = create_adversarial_mnist_dataloaders(data_folder,
                                                                                       os.path.join(
-                                                                                          'data', 'mnist_adversarial_sign'),
+                                                                                        'data', 'mnist_adversarial_sign'),
                                                                                       self.params['epsilon'],
                                                                                       self.params['batch_size'],
                                                                                       self.params['num_workers'])

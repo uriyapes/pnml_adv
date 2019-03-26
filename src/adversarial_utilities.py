@@ -75,7 +75,9 @@ def create_adversarial_mnist_sign_dataset(data_folder='./data',
     model.load_state_dict(torch.load("./models/pnml_mnist_model_0.163129.pt"))
     normalize_mnist = transforms.Normalize(mean=[0.1307], std=[0.3081])
     if os.path.exists(output_folder):
+        print("Load adversarial_mnist_sign_dataset")
         return output_folder
+    print("create_adversarial_mnist_sign_dataset...")
     pathlib.Path(output_folder).mkdir(parents=True, exist_ok=True)
     testset = datasets.MNIST(root=data_folder,
                              train=False,
@@ -83,7 +85,7 @@ def create_adversarial_mnist_sign_dataset(data_folder='./data',
                              transform=transforms.Compose([transforms.ToTensor(),
                                                            normalize_mnist]))
     testloader = data.DataLoader(testset,
-                                 batch_size=1,
+                                 batch_size=10,
                                  shuffle=False,
                                  num_workers=0)
 
@@ -103,7 +105,7 @@ def create_adversarial_mnist_sign_dataset(data_folder='./data',
 
         # Forward pass the image through the model
         output = model(image)
-        loss = criterion(output, target)
+        loss = criterion(output, target) * len(image)
         model.zero_grad()
 
         # Calculate gradients of model in backward pass

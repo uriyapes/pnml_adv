@@ -19,8 +19,7 @@ class TrainClass:
     """
 
     def __init__(self, params_to_train, learning_rate: float, momentum: float, step_size: list, gamma: float,
-                 weight_decay: float,
-                 logger=None):
+                 weight_decay: float, logger=None, adv_learn_eps=0):
         """
         Initialize train class object.
         :param params_to_train: the parameters of pytorch Module that will be trained.
@@ -30,6 +29,7 @@ class TrainClass:
         :param gamma:  reducing the learning rate by gamma each step_size.
         :param weight_decay: L2 regularization.
         :param logger: logger class in order to print logs and save results.
+        :param adv_learn_eps: The weight that should be given to the adversarial learning regulaizer (0 means none).
         """
 
         self.num_epochs = 20
@@ -48,6 +48,7 @@ class TrainClass:
                                                         milestones=step_size,
                                                         gamma=gamma)
         self.freeze_batch_norm = True
+        self.adv_learn_eps = adv_learn_eps
 
     def train_model(self, model, dataloaders, num_epochs: int = 10, acc_goal=None):
         """
@@ -117,6 +118,15 @@ class TrainClass:
             # Adjust to CUDA
             images = images.cuda() if torch.cuda.is_available() else images
             labels = labels.cuda() if torch.cuda.is_available() else labels
+            if self.adv_learn_eps is not 0:
+                images.requires_grad = True
+                # adv_images = images.clone()
+                # adv_images.requires_grad = True
+                # y = y.cuda() if torch.cuda.is_available() else y
+                # x = images.detach()
+                # x = x.cuda() if torch.cuda.is_available() else x
+                # x.requires_grad = True
+                # xx = torch.autograd.Variable(images.data.clone(), requires_grad=True)
 
             # Forward
             self.optimizer.zero_grad()
@@ -124,10 +134,27 @@ class TrainClass:
             loss = self.criterion(outputs, labels)  # Negative log-loss
             _, predicted = torch.max(outputs.data, 1)
             correct += (predicted == labels).sum().item()
-            train_loss += loss * len(images)  # loss sum for all the batch
+            train_loss += loss * len(images)  # loss sum for the epoch
 
             # Back-propagation
-            loss.backward()
+
+            if self.adv_learn_eps is 0:
+                loss.backward()
+            else:
+                # The loss is averaged over the minibatch, this doesn't matter at all since the loss magnitude
+                # is only just to determine gradient sign. Each pixel is changed by -+epsilon, no matter
+                # it's gradient magnitude.
+                loss.backward(retain_graph=True)
+                img_grad = images.grad.data
+                img_grad_eps = img_grad.sign() * 0.05 # TODO: change to eps
+                adv_images = images.data + img_grad_eps
+                torch.clamp(adv_images, 0, 1)
+                self.optimizer.zero_grad()
+                outputs = model(adv_images)
+                adv_loss = self.criterion(outputs, labels)  # Negative log-loss
+                total_loss = (1 - self.adv_learn_eps) * loss + self.adv_learn_eps * adv_loss
+                total_loss.backward()
+
             self.optimizer.step()
 
         self.scheduler.step()
