@@ -47,7 +47,7 @@ class Experiment:
         self.executed_get_params = True
         return self.params
 
-    def get_dataloaders(self, data_folder: str = './data'):
+    def get_dataloaders(self, data_folder: str = './data', adv_data_folder: str = './data/mnist_adversarial_sign'):
 
         if self.executed_get_params is False:
             _ = self.get_params()
@@ -103,11 +103,10 @@ class Experiment:
                            'classes': classes}
         elif self.exp_type == 'mnist_adversarial':
             trainloader, testloader, classes = create_adversarial_mnist_dataloaders(data_folder,
-                                                                                      os.path.join(
-                                                                                          'data', 'mnist_adversarial_sign'),
-                                                                                      self.params['epsilon'],
-                                                                                      self.params['batch_size'],
-                                                                                      self.params['num_workers'])
+                                                                                    adv_data_folder,
+                                                                                    self.params['epsilon'],
+                                                                                    self.params['batch_size'],
+                                                                                    self.params['num_workers'])
             dataloaders = {'train': trainloader,
                            'test': testloader,
                            'classes': classes}

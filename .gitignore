@@ -16,6 +16,6 @@ src/\.ipynb_checkpoints/
 **/*.log
 
 output/
-
+output_temp/
 models/
 *.pem
