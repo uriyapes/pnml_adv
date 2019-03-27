@@ -9,7 +9,7 @@ from dataset_utilities import *
 
 print(os.getcwd()) #print working dir
 def plt_adv_mnist_img():
-    trainloader, testloader, classes = create_adversarial_mnist_dataloaders(data_dir='./data', adversarial_dir='./data/mnist_adversarial_sign_batch')
+    trainloader, testloader, classes = create_adversarial_mnist_dataloaders(data_dir='./data', adversarial_dir='./data/mnist_adversarial_sign_batch', epsilon=0.25)
 
     num_of_img_to_plt = 10
     for batch_idx, (inputs, labels) in enumerate(testloader):
@@ -60,7 +60,7 @@ def train_model(experiment_type: str):
                              params_init_training['step_size'],
                              params_init_training['gamma'],
                              params_init_training['weight_decay'],
-                             logger, 0.5)
+                             logger, 0.5, params["epsilon"])
 
     if params_init_training["do_initial_training"]:
         model_base, train_loss, test_loss = train_class.train_model(model_base, dataloaders,

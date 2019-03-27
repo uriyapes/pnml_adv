@@ -397,12 +397,16 @@ class MnistAdversarial(datasets.MNIST):
         super(MnistAdversarial, self).__init__(**kwargs)
         self.adversarial_sign_dataset_path = adversarial_sign_dataset_path
         self.epsilon = epsilon
+        self.test_data = self.test_data.type(torch.float32) #avoid underflow
         grp_size = 10
         for index in range(int(self.test_data.shape[0]/grp_size)):
             sign = np.load(os.path.join(self.adversarial_sign_dataset_path, str(index) + '.npy'))
             # sign = np.transpose(sign, (1, 2, 0)) #This is needed in cifar10 where we have 3 dimension
-            sign = torch.from_numpy(sign).type(torch.uint8)
+            sign = torch.from_numpy(sign)
+            sign = sign.type(torch.float32)
             self.test_data[index*grp_size:(index+1)*grp_size] = np.clip(self.test_data[index*grp_size:(index+1)*grp_size] + (epsilon * 255) * sign, 0, 255)
+        self.test_data = self.test_data.type(torch.uint8)
+        assert(self.test_data.min() >= 0)
 
 def create_adversarial_mnist_dataloaders(data_dir: str = './data', adversarial_dir: str = os.path.join('data', 'mnist_adversarial_sign'),
                                            epsilon: float = 0.5, batch_size: int = 128, num_workers: int = 4):

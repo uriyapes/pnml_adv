@@ -19,7 +19,7 @@ class TrainClass:
     """
 
     def __init__(self, params_to_train, learning_rate: float, momentum: float, step_size: list, gamma: float,
-                 weight_decay: float, logger=None, adv_learn_eps=0):
+                 weight_decay: float, logger=None, adv_learn_alpha=0, adv_learn_eps=0.05):
         """
         Initialize train class object.
         :param params_to_train: the parameters of pytorch Module that will be trained.
@@ -29,7 +29,7 @@ class TrainClass:
         :param gamma:  reducing the learning rate by gamma each step_size.
         :param weight_decay: L2 regularization.
         :param logger: logger class in order to print logs and save results.
-        :param adv_learn_eps: The weight that should be given to the adversarial learning regulaizer (0 means none).
+        :param adv_learn_alpha: The weight that should be given to the adversarial learning regulaizer (0 means none).
         """
 
         self.num_epochs = 20
@@ -48,6 +48,7 @@ class TrainClass:
                                                         milestones=step_size,
                                                         gamma=gamma)
         self.freeze_batch_norm = True
+        self.adv_learn_alpha = adv_learn_alpha
         self.adv_learn_eps = adv_learn_eps
 
     def train_model(self, model, dataloaders, num_epochs: int = 10, acc_goal=None):
@@ -108,8 +109,8 @@ class TrainClass:
         model.train()
 
         # Turn off batch normalization update
-        if self.freeze_batch_norm is True:
-            model = model.apply(set_bn_eval)
+        if self.freeze_batch_norm is True: # TODO: this seems to always work, meaning that batchnorm and dropout are irrelevant
+            model = model.apply(set_bn_eval) # this fucntion calls model.eval() which only effects dropout and batchnorm which will work in eval mode.
 
         train_loss = 0
         correct = 0
@@ -118,15 +119,8 @@ class TrainClass:
             # Adjust to CUDA
             images = images.cuda() if torch.cuda.is_available() else images
             labels = labels.cuda() if torch.cuda.is_available() else labels
-            if self.adv_learn_eps is not 0:
+            if self.adv_learn_alpha is not 0:
                 images.requires_grad = True
-                # adv_images = images.clone()
-                # adv_images.requires_grad = True
-                # y = y.cuda() if torch.cuda.is_available() else y
-                # x = images.detach()
-                # x = x.cuda() if torch.cuda.is_available() else x
-                # x.requires_grad = True
-                # xx = torch.autograd.Variable(images.data.clone(), requires_grad=True)
 
             # Forward
             self.optimizer.zero_grad()
@@ -138,7 +132,7 @@ class TrainClass:
 
             # Back-propagation
 
-            if self.adv_learn_eps is 0:
+            if self.adv_learn_alpha is 0:
                 loss.backward()
             else:
                 # The loss is averaged over the minibatch, this doesn't matter at all since the loss magnitude
@@ -146,13 +140,14 @@ class TrainClass:
                 # it's gradient magnitude.
                 loss.backward(retain_graph=True)
                 img_grad = images.grad.data
-                img_grad_eps = img_grad.sign() * 0.05 # TODO: change to eps
+                img_grad_eps = img_grad.sign() * self.adv_learn_eps
                 adv_images = images.data + img_grad_eps
                 torch.clamp(adv_images, 0, 1)
                 self.optimizer.zero_grad()
                 outputs = model(adv_images)
                 adv_loss = self.criterion(outputs, labels)  # Negative log-loss
-                total_loss = (1 - self.adv_learn_eps) * loss + self.adv_learn_eps * adv_loss
+                total_loss = (1 - self.adv_learn_alpha) * loss + self.adv_learn_alpha * adv_loss
+                images.requires_grad = False
                 total_loss.backward()
 
             self.optimizer.step()
