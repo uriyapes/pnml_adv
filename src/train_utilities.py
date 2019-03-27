@@ -10,7 +10,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch import nn
 
-from dataset_utilities import insert_sample_to_dataset
+from dataset_utilities import insert_sample_to_dataset, mnist_std
 
 
 class TrainClass:
@@ -140,7 +140,7 @@ class TrainClass:
                 # it's gradient magnitude.
                 loss.backward(retain_graph=True)
                 img_grad = images.grad.data
-                img_grad_eps = img_grad.sign() * self.adv_learn_eps
+                img_grad_eps = img_grad.sign() * self.adv_learn_eps * (1/mnist_std) # Normalization by std expand the value range TODO: change to generic dataset std
                 adv_images = images.data + img_grad_eps
                 torch.clamp(adv_images, 0, 1)
                 self.optimizer.zero_grad()

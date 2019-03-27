@@ -14,6 +14,7 @@ from noise_dataset_class import NoiseDataset
 mean_cifar10 = [0.485, 0.456, 0.406]
 std_cifar10 = [0.229, 0.224, 0.225]
 normalize = transforms.Normalize(mean=mean_cifar10, std=std_cifar10)
+mnist_std = 0.3081
 
 
 def insert_sample_to_dataset(trainloader, sample_to_insert_data, sample_to_insert_label):

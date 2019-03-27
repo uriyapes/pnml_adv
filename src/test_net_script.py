@@ -60,7 +60,8 @@ def train_model(experiment_type: str):
                              params_init_training['step_size'],
                              params_init_training['gamma'],
                              params_init_training['weight_decay'],
-                             logger, 0.5, params["epsilon"])
+                             logger,
+                             params_init_training["adv_alpha"], params["epsilon"])
 
     if params_init_training["do_initial_training"]:
         model_base, train_loss, test_loss = train_class.train_model(model_base, dataloaders,
