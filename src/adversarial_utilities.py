@@ -69,17 +69,19 @@ def create_adversarial_sign_dataset(data_folder='./data',
     return output_folder
 
 
-def create_adversarial_mnist_sign_dataset(data_folder='./data',
-                                    output_folder=os.path.join('data', 'adversarial_sign_mnist')):
+def create_adversarial_mnist_sign_dataset(data_dir, load_sign_dataset, adversarial_sign_dataset_path, create_sign_dataset_model_path):
+    if load_sign_dataset:
+        assert(os.path.exists(adversarial_sign_dataset_path))
+        print("Load:" + adversarial_sign_dataset_path)
+        return
+
     model = Net()
-    model.load_state_dict(torch.load("./models/pnml_mnist_model_0.163129.pt"))
+    model.load_state_dict(torch.load(create_sign_dataset_model_path))
     normalize_mnist = transforms.Normalize(mean=[0.1307], std=[0.3081])
-    if os.path.exists(output_folder):
-        print("Load adversarial_mnist_sign_dataset")
-        return output_folder
-    print("create_adversarial_mnist_sign_dataset...")
-    pathlib.Path(output_folder).mkdir(parents=True, exist_ok=True)
-    testset = datasets.MNIST(root=data_folder,
+
+    print("create_adversarial_mnist_sign_dataset from model:" + create_sign_dataset_model_path)
+    pathlib.Path(adversarial_sign_dataset_path).mkdir(parents=True, exist_ok=True)
+    testset = datasets.MNIST(root=data_dir,
                              train=False,
                              download=True,
                              transform=transforms.Compose([transforms.ToTensor(),
@@ -116,8 +118,6 @@ def create_adversarial_mnist_sign_dataset(data_folder='./data',
 
         # Collect the element-wise sign of the image gradient and save result
         sign_data_grad = data_grad.sign().squeeze()
-        np.save(os.path.join(output_folder, str(iter_num)), sign_data_grad)
-        if iter_num % 1000 == 0:
+        np.save(os.path.join(adversarial_sign_dataset_path, str(iter_num)), sign_data_grad)
+        if iter_num % 500 == 0:
             print('Saved adversarial sign: ', iter_num)
-
-    return output_folder

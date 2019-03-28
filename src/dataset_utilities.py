@@ -409,7 +409,9 @@ class MnistAdversarial(datasets.MNIST):
         self.test_data = self.test_data.type(torch.uint8)
         assert(self.test_data.min() >= 0)
 
-def create_adversarial_mnist_dataloaders(data_dir: str = './data', adversarial_dir: str = os.path.join('data', 'mnist_adversarial_sign'),
+def create_adversarial_mnist_dataloaders(data_dir: str = './data', load_sign_dataset:bool = True,
+                                         adversarial_sign_dataset_path: str =  os.path.join('data', 'mnist_adversarial_sign_batch'),
+                                            create_sign_dataset_model_path: str = "./models/mnist_adversarial_model_adv_train_1.pt",
                                            epsilon: float = 0.5, batch_size: int = 128, num_workers: int = 4):
     """
     create train and test pytorch dataloaders for MNIST dataset
@@ -422,6 +424,8 @@ def create_adversarial_mnist_dataloaders(data_dir: str = './data', adversarial_d
     """
     print("create_adversarial_mnist_dataloaders...")
     # Normalization for MNIST dataset
+    create_adversarial_mnist_sign_dataset(data_dir, load_sign_dataset, adversarial_sign_dataset_path, create_sign_dataset_model_path)
+
     normalize_mnist = transforms.Normalize(mean=[0.1307], std=[0.3081])
     trainset = datasets.MNIST(root=data_dir,
                               train=True,
@@ -432,8 +436,6 @@ def create_adversarial_mnist_dataloaders(data_dir: str = './data', adversarial_d
                                   batch_size=batch_size,
                                   shuffle=False,
                                   num_workers=num_workers)
-
-    adversarial_sign_dataset_path = create_adversarial_mnist_sign_dataset(data_dir, output_folder=adversarial_dir)
 
     testset = MnistAdversarial(root=data_dir,
                                  train=False,

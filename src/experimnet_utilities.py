@@ -7,6 +7,7 @@ from dataset_utilities import create_cifar10_random_label_dataloaders
 from dataset_utilities import create_mnist_dataloaders
 from dataset_utilities import create_svhn_dataloaders
 from dataset_utilities import dataloaders_noise
+from adversarial_utilities import create_adversarial_mnist_sign_dataset
 from mpl import Net
 from resnet import resnet20, load_pretrained_resnet20_cifar10_model
 from wide_resnet import WideResNet
@@ -47,7 +48,7 @@ class Experiment:
         self.executed_get_params = True
         return self.params
 
-    def get_dataloaders(self, data_folder: str = './data', adv_data_folder: str = './data/mnist_adversarial_sign'):
+    def get_dataloaders(self, data_folder: str = './data'):
 
         if self.executed_get_params is False:
             _ = self.get_params()
@@ -103,7 +104,9 @@ class Experiment:
                            'classes': classes}
         elif self.exp_type == 'mnist_adversarial':
             trainloader, testloader, classes = create_adversarial_mnist_dataloaders(data_folder,
-                                                                                    adv_data_folder,
+                                                                                    self.params["adv_attack"]["load_sign_dataset"],
+                                                                                    self.params["adv_attack"]["sign_dataset_path"],
+                                                                                    self.params["adv_attack"]["create_sign_dataset_model_path"],
                                                                                     self.params['epsilon'],
                                                                                     self.params['batch_size'],
                                                                                     self.params['num_workers'])

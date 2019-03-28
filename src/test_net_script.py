@@ -47,8 +47,7 @@ def train_model(experiment_type: str):
     ################
     # Load datasets
     data_folder = './data'
-    adv_data_folder = os.path.join('data', 'mnist_adversarial_sign_batch')
-    dataloaders = experiment_h.get_dataloaders(data_folder, adv_data_folder)
+    dataloaders = experiment_h.get_dataloaders(data_folder)
 
     ################
     # Run basic training
@@ -66,6 +65,8 @@ def train_model(experiment_type: str):
     if params_init_training["do_initial_training"]:
         model_base, train_loss, test_loss = train_class.train_model(model_base, dataloaders,
                                                                    params_init_training['epochs'])
+        torch.save(model_base.state_dict(),
+               os.path.join(logger.output_folder, '%s_model_%f.pt' % (experiment_h.get_exp_name(), train_loss)))
     else:
         ##load model and test it
         model_base.load_state_dict(torch.load(params['initial_training']['pretrained_model_path']))
