@@ -107,7 +107,7 @@
         },
         "fit_to_sample": {
             "epochs": 10,
-            "lr": 0.001,
+            "lr": 0.0001,
             "momentum": 0.9,
             "step_size": [10],
             "gamma": 0.1,
@@ -117,4 +117,3 @@
         }
     }
 }
-
