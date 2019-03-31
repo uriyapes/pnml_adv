@@ -435,7 +435,8 @@ def create_adversarial_mnist_dataloaders(data_dir: str = './data', load_sign_dat
     trainloader = data.DataLoader(trainset,
                                   batch_size=batch_size,
                                   shuffle=False,
-                                  num_workers=num_workers)
+                                  num_workers=num_workers,
+                                  pin_memory=True)
 
     testset = MnistAdversarial(root=data_dir,
                                  train=False,
@@ -448,7 +449,8 @@ def create_adversarial_mnist_dataloaders(data_dir: str = './data', load_sign_dat
     testloader = data.DataLoader(testset,
                                  batch_size=batch_size,
                                  shuffle=False,
-                                 num_workers=num_workers)
+                                 num_workers=num_workers,
+                                 pin_memory=True)
 
 
     # testset = datasets.MNIST(root=data_dir,

@@ -71,7 +71,7 @@ class TrainClass:
         for epoch in range(self.num_epochs):
 
             epoch_start_time = time.time()
-            train_loss, train_acc = self.train(model, dataloaders['train'])
+            total_loss_in_epoch, train_loss, train_acc = self.train(model, dataloaders['train'])
             if self.eval_test_during_train is True:
                 test_loss, test_acc = self.test(model, dataloaders['test'])
             else:
@@ -81,9 +81,9 @@ class TrainClass:
             for param_group in self.optimizer.param_groups:
                 lr = param_group['lr']
 
-            self.logger.info('[%d/%d] [train test] loss =[%f %f], acc=[%f %f], lr=%f, epoch_time=%.2f'
+            self.logger.info('[%d/%d] [train test] loss =[%f %f] adv_loss=[%f], acc=[%f %f], lr=%f, epoch_time=%.2f'
                              % (epoch, self.num_epochs - 1,
-                                train_loss, test_loss, train_acc, test_acc,
+                                train_loss, test_loss, total_loss_in_epoch, train_acc, test_acc,
                                 lr, epoch_time))
 
             # Stop training if desired goal is achieved
@@ -92,8 +92,8 @@ class TrainClass:
         test_loss, test_acc = self.test(model, dataloaders['test'])
 
         # Print and save
-        self.logger.info('----- [train test] loss =[%f %f], acc=[%f %f] epoch_time=%.2f' %
-                         (train_loss, test_loss, train_acc, test_acc,
+        self.logger.info('----- [train test] loss =[%f %f], adv_loss=[%f], acc=[%f %f] epoch_time=%.2f' %
+                         (train_loss, test_loss, total_loss_in_epoch, train_acc, test_acc,
                           epoch_time))
         train_loss_output = float(train_loss.cpu().detach().numpy().round(16))
         test_loss_output = float(test_loss.cpu().detach().numpy().round(16))
@@ -111,7 +111,7 @@ class TrainClass:
         # Turn off batch normalization update
         if self.freeze_batch_norm is True: # TODO: this seems to always work, meaning that batchnorm and dropout are irrelevant
             model = model.apply(set_bn_eval) # this fucntion calls model.eval() which only effects dropout and batchnorm which will work in eval mode.
-
+        total_loss_in_epoch = 0
         train_loss = 0
         correct = 0
         # Iterate over dataloaders
@@ -147,6 +147,7 @@ class TrainClass:
                 outputs = model(adv_images)
                 adv_loss = self.criterion(outputs, labels)  # Negative log-loss
                 total_loss = (1 - self.adv_learn_alpha) * loss + self.adv_learn_alpha * adv_loss
+                total_loss_in_epoch += total_loss * len(images)
                 images.requires_grad = False
                 total_loss.backward()
 
@@ -154,8 +155,9 @@ class TrainClass:
 
         self.scheduler.step()
         train_loss /= len(train_loader.dataset)
+        total_loss_in_epoch /= len(train_loader.dataset)
         train_acc = correct / len(train_loader.dataset)
-        return train_loss, train_acc
+        return total_loss_in_epoch, train_loss, train_acc
 
     def test(self, model, test_loader):
         """
@@ -264,7 +266,8 @@ def execute_pnml_training(train_params: dict, dataloaders_input: dict,
         train_class = TrainClass(filter(lambda p: p.requires_grad, model.parameters()),
                                  train_params['lr'], train_params['momentum'], train_params['step_size'],
                                  train_params['gamma'], train_params['weight_decay'],
-                                 logger.logger)
+                                 logger.logger,
+                                 train_params["adv_alpha"], train_params["epsilon"])
         train_class.eval_test_during_train = False
         train_class.freeze_batch_norm = True
         model, train_loss, test_loss = train_class.train_model(model, dataloaders, train_params['epochs'])

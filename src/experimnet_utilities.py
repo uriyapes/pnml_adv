@@ -107,7 +107,7 @@ class Experiment:
                                                                                     self.params["adv_attack"]["load_sign_dataset"],
                                                                                     self.params["adv_attack"]["sign_dataset_path"],
                                                                                     self.params["adv_attack"]["create_sign_dataset_model_path"],
-                                                                                    self.params['epsilon'],
+                                                                                    self.params["adv_attack"]['epsilon'],
                                                                                     self.params['batch_size'],
                                                                                     self.params['num_workers'])
             dataloaders = {'train': trainloader,

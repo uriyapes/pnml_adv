@@ -55,7 +55,8 @@ def run_experiment(experiment_type: str):
                                  params_init_training['step_size'],
                                  params_init_training['gamma'],
                                  params_init_training['weight_decay'],
-                                 logger.logger)
+                                 logger.logger,
+                                 params_init_training["adv_alpha"], params_init_training["epsilon"]) # TODO: not all experiments contain adversarial parameters, fix this
         train_class.eval_test_during_train = False
         train_class.freeze_batch_norm = False
         acc_goal = params_init_training['acc_goal'] if 'acc_goal' in params_init_training else None
@@ -84,7 +85,8 @@ def run_experiment(experiment_type: str):
                              params_fit_to_sample['step_size'],
                              params_fit_to_sample['gamma'],
                              params_fit_to_sample['weight_decay'],
-                             logger.logger)
+                             logger.logger,
+                             params_fit_to_sample["adv_alpha"], params_fit_to_sample["epsilon"])
     train_class.eval_test_during_train = False
     model_erm, train_loss, test_loss = train_class.train_model(model_erm, dataloaders,
                                                                params_fit_to_sample['epochs'])
@@ -126,7 +128,7 @@ def run_experiment(experiment_type: str):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Applications of Deep PNML')
-    parser.add_argument('-t', '--experiment_type', default='pnml_cifar10',
+    parser.add_argument('-t', '--experiment_type', default='mnist_adversarial',
                         help='Type of experiment to execute',
                         type=str)
     args = vars(parser.parse_args())
