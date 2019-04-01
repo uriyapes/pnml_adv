@@ -222,7 +222,7 @@ def set_bn_eval(model):
 
 def execute_pnml_training(train_params: dict, dataloaders_input: dict,
                           sample_test_data, sample_test_true_label, idx: int,
-                          model_base_input, logger):
+                          model_base_input, logger, genie_only_training: bool=False):
     """
     Execute the PNML procedure: for each label train the model and save the prediction afterword.
     :param train_params: parameters of training the model for each label
@@ -232,6 +232,7 @@ def execute_pnml_training(train_params: dict, dataloaders_input: dict,
     :param idx: the index in the testset dataset of the test sample
     :param model_base_input: the base model from which the train will start
     :param logger: logger class to print logs and save results to file
+    :param genie_only_training: calculate only genie probability for speed up when debugging
     :return: None
     """
 
@@ -253,7 +254,12 @@ def execute_pnml_training(train_params: dict, dataloaders_input: dict,
         classes_true = classes_trained
 
     # Iteration of all labels
-    for trained_label in range(len(classes_trained)):
+    if genie_only_training:
+        trained_label_list = [sample_test_true_label.tolist()]
+    else:
+        trained_label_list = range(len(classes_trained))
+
+    for trained_label in trained_label_list:
         time_trained_label_start = time.time()
 
         # Insert test sample to train dataset

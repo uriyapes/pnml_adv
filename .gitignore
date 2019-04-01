@@ -18,4 +18,5 @@ src/\.ipynb_checkpoints/
 output/
 output_temp/
 models/
+results/
 *.pem
