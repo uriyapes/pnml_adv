@@ -117,7 +117,7 @@ def run_experiment(experiment_type: str):
 
         # NML training- train the model with test sample
         execute_pnml_training(params_fit_to_sample, dataloaders, sample_test_data, sample_test_true_label, idx,
-                              model_base, logger)
+                              model_base, logger, genie_only_training=True)
 
         # Log and save
         logger.save_json_file()
