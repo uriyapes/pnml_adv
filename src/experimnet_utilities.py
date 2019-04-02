@@ -8,7 +8,7 @@ from dataset_utilities import create_mnist_dataloaders
 from dataset_utilities import create_svhn_dataloaders
 from dataset_utilities import dataloaders_noise
 from adversarial_utilities import create_adversarial_mnist_sign_dataset
-from mpl import Net
+from mpl import Net, Net_800_400_100
 from resnet import resnet20, load_pretrained_resnet20_cifar10_model
 from wide_resnet import WideResNet
 
@@ -133,7 +133,8 @@ class Experiment:
         elif self.exp_type == 'adversarial':
             model = load_pretrained_resnet20_cifar10_model(resnet20())
         elif self.exp_type == 'mnist_adversarial':
-            model = Net()
+            # model = Net()
+            model = Net_800_400_100()
         else:
             raise NameError('No experiment type: %s' % self.exp_type)
 
