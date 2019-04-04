@@ -9,7 +9,7 @@ from scipy.stats import entropy
 from dataset_utilities import create_cifar10_dataloaders
 
 # Import tesloader for random label experiment
-_, testloader, _ = create_cifar10_dataloaders('../data/', 1, 1)
+# _, testloader, _ = create_cifar10_dataloaders('../data/', 1, 1)
 
 
 def extract_probabilities_list(evaluation_dict):
@@ -279,6 +279,31 @@ def create_twice_univ_df(results_df_list: list):
     twice_df['entropy'] = entropy_list
 
     return twice_df, idx_common
+
+
+def calc_erm_and_genie_stats(results_df_list):
+    results_dict = load_dict_from_file_list(results_df_list)
+
+    is_random_labels = False
+    is_out_of_dist = False
+    genie_df, statistic_genie_df = None, None
+
+    # Calc genie
+    genie_df = result_dict_to_genie_df(results_dict, is_random_labels=is_random_labels)
+    statistic_genie_df = calc_statistic_from_df_single(genie_df).rename(columns={'statistics': 'genie'})
+    genie_df = genie_df.add_prefix('genie_')
+    print(statistic_genie_df)
+    print(genie_df.shape[0])
+
+    # Calc ERM
+    erm_df = result_dict_to_erm_df(results_dict, is_random_labels=is_random_labels, is_out_of_dist=is_out_of_dist)
+    statistic_erm_df = calc_statistic_from_df_single(erm_df).rename(columns={'statistics': 'erm'})
+    erm_df = erm_df.add_prefix('erm_')
+    print(statistic_erm_df)
+    print(erm_df.shape[0])
+
+
+
 
 
 if __name__ == "__main__":

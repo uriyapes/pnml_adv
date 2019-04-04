@@ -51,7 +51,8 @@ class TrainClass:
         self.adv_learn_alpha = adv_learn_alpha
         self.adv_learn_eps = adv_learn_eps
 
-    def train_model(self, model, dataloaders, num_epochs: int = 10, acc_goal=None):
+    def train_model(self, model, dataloaders, num_epochs: int = 10, acc_goal=None,
+                    sample_test_data=None, sample_test_true_label=None):
         """
         Train DNN model using some trainset.
         :param model: the model which will be trained.
@@ -71,7 +72,8 @@ class TrainClass:
         for epoch in range(self.num_epochs):
 
             epoch_start_time = time.time()
-            total_loss_in_epoch, train_loss, train_acc = self.train(model, dataloaders['train'])
+            total_loss_in_epoch, train_loss, train_acc = self.__train(model, dataloaders['train'],
+                                                                      sample_test_data, sample_test_true_label)
             if self.eval_test_during_train is True:
                 test_loss, test_acc = self.test(model, dataloaders['test'])
             else:
@@ -99,7 +101,7 @@ class TrainClass:
         test_loss_output = float(test_loss.cpu().detach().numpy().round(16))
         return model, train_loss_output, test_loss_output
 
-    def train(self, model, train_loader):
+    def __train(self, model, train_loader, sample_test_data=None, sample_test_true_label=None):
         """
         Execute one epoch of training
         :param model: the model that will be trained.
@@ -109,13 +111,23 @@ class TrainClass:
         model.train()
 
         # Turn off batch normalization update
-        if self.freeze_batch_norm is True: # TODO: this seems to always work, meaning that batchnorm and dropout are irrelevant
+        if self.freeze_batch_norm is True: # this works during fine-tuning because it can change the model even if LR=0.
             model = model.apply(set_bn_eval) # this fucntion calls model.eval() which only effects dropout and batchnorm which will work in eval mode.
         total_loss_in_epoch = 0
         train_loss = 0
         correct = 0
+        loss_sample_test = 0
+        # max_iter = np.ceil(len(train_loader.dataset) / train_loader.batch_size) #TODO: from some reason I am missing the last batch but the dataloader should not drop the last batch
+        if sample_test_data is not None:
+
+            sample_test_data = sample_test_data.cuda() if torch.cuda.is_available() else sample_test_data
+            sample_test_true_label = sample_test_true_label.cuda() if torch.cuda.is_available() else sample_test_true_label
+            sample_test_data.requires_grad=False
+            sample_test_true_label.requires_grad=False
+
         # Iterate over dataloaders
         for iter_num, (images, labels) in enumerate(train_loader):
+
             # Adjust to CUDA
             images = images.cuda() if torch.cuda.is_available() else images
             labels = labels.cuda() if torch.cuda.is_available() else labels
@@ -124,8 +136,9 @@ class TrainClass:
 
             # Forward
             self.optimizer.zero_grad()
-            outputs = model(images)
-            loss = self.criterion(outputs, labels)  # Negative log-loss
+            outputs, loss = self.__forward_pass(model, images, labels)
+            # outputs = model(images)
+            # loss = self.criterion(outputs, labels)  # Negative log-loss
             _, predicted = torch.max(outputs.data, 1)
             correct += (predicted == labels).sum().item()
             train_loss += loss * len(images)  # loss sum for the epoch
@@ -143,12 +156,31 @@ class TrainClass:
                 img_grad_eps = img_grad.sign() * self.adv_learn_eps * (1/mnist_std) # Normalization by std expand the value range TODO: change to generic dataset std
                 adv_images = images.data + img_grad_eps
                 torch.clamp(adv_images, 0, 1)
-                self.optimizer.zero_grad()
-                outputs = model(adv_images)
-                adv_loss = self.criterion(outputs, labels)  # Negative log-loss
-                total_loss = (1 - self.adv_learn_alpha) * loss + self.adv_learn_alpha * adv_loss
-                total_loss_in_epoch += total_loss * len(images)
                 images.requires_grad = False
+                self.optimizer.zero_grad()
+
+                #### add another sample
+                # TODO: move it outside if, otherwise this won't happen for non-adversarial training
+                if (iter_num) == 0 and sample_test_data is not None:
+                    sample_test_data.requires_grad = False
+                    sample_test_true_label.requires_grad = False
+                    output_sample_test, loss_sample_test = self.__forward_pass(model, sample_test_data,
+                                                                               sample_test_true_label)
+                    _, predicted = torch.max(output_sample_test.data, 1)
+                    # correct += (predicted == sample_test_true_label).sum().item() #TODO: when calculating accuracy (after epoch) we need to divide by +1
+                    if self.criterion.reduction == 'elementwise_mean':  # Re-average the loss since another image was added
+                        loss_sample_test = loss_sample_test / (len(images) + 1)
+                        # loss = loss * len(images) / (len(images) + 1) TODO: uncomment
+                    loss_sample_test.backward(retain_graph=True)
+                    # self.optimizer.zero_grad()
+                ####
+
+
+                _, adv_loss = self.__forward_pass(model, adv_images, labels)
+                # outputs = model(adv_images)
+                # adv_loss = self.criterion(outputs, labels)  # Negative log-loss
+                total_loss = (1 - self.adv_learn_alpha) * loss + self.adv_learn_alpha * adv_loss #+ loss_sample_test
+                total_loss_in_epoch += total_loss * len(images)
                 total_loss.backward()
 
             self.optimizer.step()
@@ -158,6 +190,12 @@ class TrainClass:
         total_loss_in_epoch /= len(train_loader.dataset)
         train_acc = correct / len(train_loader.dataset)
         return total_loss_in_epoch, train_loss, train_acc
+
+    def __forward_pass(self, model, images, labels):
+        outputs = model(images)
+        loss = self.criterion(outputs, labels)  # Negative log-loss
+        return outputs, loss
+
 
     def test(self, model, test_loader):
         """
@@ -263,9 +301,16 @@ def execute_pnml_training(train_params: dict, dataloaders_input: dict,
         time_trained_label_start = time.time()
 
         # Insert test sample to train dataset
-        dataloaders = deepcopy(dataloaders_input)
-        trainloader_with_sample = insert_sample_to_dataset(dataloaders['train'], sample_test_data, trained_label)
-        dataloaders['train'] = trainloader_with_sample
+        # dataloaders = deepcopy(dataloaders_input)
+        # trainloader_with_sample = insert_sample_to_dataset(dataloaders['train'], sample_test_data, trained_label)
+        # dataloaders['train'] = trainloader_with_sample
+
+        # Execute transformation
+        sample_test_data_for_trans = copy.deepcopy(sample_test_data)
+        if len(sample_test_data.shape) == 2:
+            sample_test_data_for_trans = sample_test_data_for_trans.unsqueeze(2).numpy()
+        sample_test_data_trans = dataloaders_input['test'].dataset.transform(sample_test_data_for_trans)
+
 
         # Train model
         model = deepcopy(model_base_input)
@@ -276,14 +321,11 @@ def execute_pnml_training(train_params: dict, dataloaders_input: dict,
                                  train_params["adv_alpha"], train_params["epsilon"])
         train_class.eval_test_during_train = False
         train_class.freeze_batch_norm = True
-        model, train_loss, test_loss = train_class.train_model(model, dataloaders, train_params['epochs'])
+        # model, train_loss, test_loss = train_class.train_model(model, dataloaders, train_params['epochs'])
+        sample_to_insert_label_expand = torch.tensor(np.expand_dims(trained_label, 0)) # make the label to tensor array type (important for loss calculation)
+        model, train_loss, test_loss = train_class.train_model(model, dataloaders_input, train_params['epochs'],
+                                                               sample_test_data=sample_test_data_trans, sample_test_true_label=sample_to_insert_label_expand)
         time_trained_label = time.time() - time_trained_label_start
-
-        # Execute transformation
-        sample_test_data_for_trans = copy.deepcopy(sample_test_data)
-        if len(sample_test_data.shape) == 2:
-            sample_test_data_for_trans = sample_test_data_for_trans.unsqueeze(2).numpy()
-        sample_test_data_trans = dataloaders['test'].dataset.transform(sample_test_data_for_trans)
 
         # Evaluate with base model
         prob, pred = eval_single_sample(model, sample_test_data_trans)
