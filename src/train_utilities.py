@@ -260,7 +260,7 @@ def set_bn_eval(model):
 
 def execute_pnml_training(train_params: dict, dataloaders_input: dict,
                           sample_test_data, sample_test_true_label, idx: int,
-                          model_base_input, logger, genie_only_training: bool=False):
+                          model_base_input, logger, genie_only_training: bool=False, adv_train: bool=False):
     """
     Execute the PNML procedure: for each label train the model and save the prediction afterword.
     :param train_params: parameters of training the model for each label
@@ -271,6 +271,7 @@ def execute_pnml_training(train_params: dict, dataloaders_input: dict,
     :param model_base_input: the base model from which the train will start
     :param logger: logger class to print logs and save results to file
     :param genie_only_training: calculate only genie probability for speed up when debugging
+    :param adv_train: train the test sample with or without adversarial regularizer
     :return: None
     """
 
@@ -300,16 +301,21 @@ def execute_pnml_training(train_params: dict, dataloaders_input: dict,
     for trained_label in trained_label_list:
         time_trained_label_start = time.time()
 
-        # Insert test sample to train dataset
-        # dataloaders = deepcopy(dataloaders_input)
-        # trainloader_with_sample = insert_sample_to_dataset(dataloaders['train'], sample_test_data, trained_label)
-        # dataloaders['train'] = trainloader_with_sample
+        if adv_train:
+            # Insert test sample to train dataset and train the test sample with adversarial regularizer
+            dataloaders = deepcopy(dataloaders_input)
+            trainloader_with_sample = insert_sample_to_dataset(dataloaders['train'], sample_test_data, trained_label)
+            dataloaders['train'] = trainloader_with_sample
+        else:
+            sample_to_insert_label_expand = torch.tensor(np.expand_dims(trained_label, 0))  # make the label to tensor array type (important for loss calculation)
 
-        # Execute transformation
+
+        # Execute transformation - for training and evaluating the test sample
         sample_test_data_for_trans = copy.deepcopy(sample_test_data)
         if len(sample_test_data.shape) == 2:
             sample_test_data_for_trans = sample_test_data_for_trans.unsqueeze(2).numpy()
         sample_test_data_trans = dataloaders_input['test'].dataset.transform(sample_test_data_for_trans)
+
 
 
         # Train model
@@ -319,12 +325,17 @@ def execute_pnml_training(train_params: dict, dataloaders_input: dict,
                                  train_params['gamma'], train_params['weight_decay'],
                                  logger.logger,
                                  train_params["adv_alpha"], train_params["epsilon"])
-        train_class.eval_test_during_train = False
+        train_class.eval_test_during_train = True
         train_class.freeze_batch_norm = True
         # model, train_loss, test_loss = train_class.train_model(model, dataloaders, train_params['epochs'])
-        sample_to_insert_label_expand = torch.tensor(np.expand_dims(trained_label, 0)) # make the label to tensor array type (important for loss calculation)
-        model, train_loss, test_loss = train_class.train_model(model, dataloaders_input, train_params['epochs'],
-                                                               sample_test_data=sample_test_data_trans, sample_test_true_label=sample_to_insert_label_expand)
+        if adv_train:
+            model, train_loss, test_loss = train_class.train_model(model, dataloaders, train_params['epochs'],
+                                                                   sample_test_data=None,
+                                                                   sample_test_true_label=None)
+        else:
+            model, train_loss, test_loss = train_class.train_model(model, dataloaders_input, train_params['epochs'],
+                                                               sample_test_data=sample_test_data_trans,
+                                                               sample_test_true_label=sample_to_insert_label_expand)
         time_trained_label = time.time() - time_trained_label_start
 
         # Evaluate with base model
