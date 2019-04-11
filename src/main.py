@@ -5,6 +5,12 @@ import time
 
 import argparse
 import torch
+torch.manual_seed(0)
+import numpy as np
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+np.random.seed(0)
+
 
 from experimnet_utilities import Experiment
 from logger_utilities import Logger
