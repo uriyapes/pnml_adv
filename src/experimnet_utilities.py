@@ -14,7 +14,7 @@ from wide_resnet import WideResNet
 
 
 class Experiment:
-    def __init__(self, exp_type: str, params: dict):
+    def __init__(self, exp_type: str, params: dict, first_idx, last_idx):
         if exp_type not in ['pnml_cifar10',
                             'random_labels',
                             'out_of_dist_svhn',
@@ -26,6 +26,9 @@ class Experiment:
         self.params = params
         self.exp_type = exp_type
         self.executed_get_params = False
+        self.first_idx=first_idx
+        self.last_idx = last_idx
+
 
     def get_params(self):
         if self.exp_type == 'pnml_cifar10':
@@ -44,6 +47,11 @@ class Experiment:
             self.params = self.params['mnist_adversarial']
         else:
             raise NameError('No experiment type: %s' % self.exp_type)
+
+        if self.first_idx is not None and self.last_idx is not None:
+            # Overwrite params
+            self.params['test_start_idx'] = self.first_idx
+            self.params['test_end_idx'] = self.last_idx
 
         self.executed_get_params = True
         return self.params

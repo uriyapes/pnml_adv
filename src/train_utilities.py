@@ -75,7 +75,7 @@ class TrainClass:
             total_loss_in_epoch, train_loss, train_acc = self.__train(model, dataloaders['train'],
                                                                       sample_test_data, sample_test_true_label)
             if self.eval_test_during_train is True:
-                test_loss, test_acc = self.test(model, dataloaders['test'])
+                test_loss, test_acc = self.eval(model, dataloaders['test'])
             else:
                 test_loss, test_acc = torch.tensor([-1.]), torch.tensor([-1.])
             epoch_time = time.time() - epoch_start_time
@@ -91,7 +91,7 @@ class TrainClass:
             # Stop training if desired goal is achieved
             if acc_goal is not None and train_acc >= acc_goal:
                 break
-        test_loss, test_acc = self.test(model, dataloaders['test'])
+        test_loss, test_acc = self.eval(model, dataloaders['test'])
 
         # Print and save
         self.logger.info('----- [train test] loss =[%f %f], adv_loss=[%f], acc=[%f %f] epoch_time=%.2f' %
@@ -196,32 +196,31 @@ class TrainClass:
         loss = self.criterion(outputs, labels)  # Negative log-loss
         return outputs, loss
 
-
-    def test(self, model, test_loader):
+    def eval(self, model, dataloader):
         """
-        Evaluate the performance of the model on the trainset.
+        Evaluate the performance of the model on the train/test sets.
         :param model: the model that will be evaluated.
-        :param test_loader: testset on which the evaluation will executed.
+        :param dataloader: trainset or testset on which the evaluation will executed.
         :return: the loss and accuracy on the testset.
         """
         model.eval()
-        test_loss = 0
+        loss = 0
         correct = 0
         with torch.no_grad():
-            for data, labels in test_loader:
+            for data, labels in dataloader:
                 data = data.cuda() if torch.cuda.is_available() else data
                 labels = labels.cuda() if torch.cuda.is_available() else labels
 
-                outputs = model(data)
-                loss = self.criterion(outputs, labels)
-                test_loss += loss * len(data)  # loss sum for all the batch
+                outputs, batch_loss = self.__forward_pass(model, data, labels)
+                # outputs = model(data)
+                # loss = self.criterion(outputs, labels)
+                loss += batch_loss * len(data)  # loss sum for all the batch
                 _, predicted = torch.max(outputs.data, 1)
                 correct += (predicted == labels).sum().item()
 
-        test_acc = correct / len(test_loader.dataset)
-        test_loss /= len(test_loader.dataset)
-        return test_loss, test_acc
-
+        acc = correct / len(dataloader.dataset)
+        loss /= len(dataloader.dataset)
+        return loss, acc
 
 def eval_single_sample(model, test_sample_data):
     """

@@ -416,7 +416,9 @@ def create_adversarial_mnist_dataloaders(data_dir: str = './data', load_sign_dat
     """
     create train and test pytorch dataloaders for MNIST dataset
     :param data_dir: the folder that will contain the data
-    :param adversarial_dir: the output dir to which the gradient adversarial sign will be saved.
+    :param load_sign_dataset: whether to load or to calculate adversarial sign dataset
+    :param adversarial_sign_dataset_path: the output dir to which the gradient adversarial sign will be saved.
+    :param create_sign_dataset_model_path: If load_sign_dataset is false use this path to model to create new adversarial sign dataset.
     :param epsilon: the additive gradient strength to be added to the image.
     :param batch_size: the size of the batch for test and train loaders
     :param num_workers: number of cpu workers which loads the GPU with the dataset

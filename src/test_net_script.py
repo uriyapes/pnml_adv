@@ -72,7 +72,7 @@ def train_model(experiment_type: str):
         model_base.load_state_dict(torch.load(params['initial_training']['pretrained_model_path']))
         model_base = model_base.cuda() if torch.cuda.is_available() else model_base
 
-    test_loss, test_acc = train_class.test(model_base, dataloaders['test'])
+    test_loss, test_acc = train_class.eval(model_base, dataloaders['test'])
     return test_loss, test_acc, model_base
 
 

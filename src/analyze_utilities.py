@@ -5,6 +5,7 @@ import time
 import numpy as np
 import pandas as pd
 from scipy.stats import entropy
+import glob
 
 from dataset_utilities import create_cifar10_dataloaders
 
@@ -301,6 +302,11 @@ def calc_erm_and_genie_stats(results_df_list):
     erm_df = erm_df.add_prefix('erm_')
     print(statistic_erm_df)
     print(erm_df.shape[0])
+
+
+def find_results_in_path(path_to_folder:str):
+    pathname = path_to_folder + '/**/results*.json'
+    return glob.glob(pathname,  recursive=True)
 
 
 

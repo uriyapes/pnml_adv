@@ -5,7 +5,7 @@ import time
 
 import argparse
 import torch
-torch.manual_seed(0)
+torch.manual_seed(1)
 import numpy as np
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
@@ -23,7 +23,7 @@ CUDA_VISIBLE_DEVICES=0 python src/main.py -t pnml_cifar10
 """
 
 
-def run_experiment(experiment_type: str):
+def run_experiment(experiment_type: str, first_idx: int = None, last_idx: int = None):
     ################
     # Load training params
     with open(os.path.join('src', 'params.json')) as f:
@@ -31,7 +31,7 @@ def run_experiment(experiment_type: str):
 
     ################
     # Class that depends ins the experiment type
-    experiment_h = Experiment(experiment_type, params)
+    experiment_h = Experiment(experiment_type, params, first_idx, last_idx)
     params = experiment_h.get_params()
 
     ################
@@ -63,7 +63,7 @@ def run_experiment(experiment_type: str):
                                  params_init_training['weight_decay'],
                                  logger.logger,
                                  params_init_training["adv_alpha"], params_init_training["epsilon"]) # TODO: not all experiments contain adversarial parameters, fix this
-        train_class.eval_test_during_train = False
+        train_class.eval_test_during_train = True
         train_class.freeze_batch_norm = False
         acc_goal = params_init_training['acc_goal'] if 'acc_goal' in params_init_training else None
         model_base, train_loss, test_loss = \
@@ -93,7 +93,12 @@ def run_experiment(experiment_type: str):
                              params_fit_to_sample['weight_decay'],
                              logger.logger,
                              params_fit_to_sample["adv_alpha"], params_fit_to_sample["epsilon"])
-    train_class.eval_test_during_train = False
+    base_train_loss, base_train_acc = train_class.eval(model_base, dataloaders['train'])
+    base_test_loss, base_test_acc = train_class.eval(model_base, dataloaders['test'])
+    logger.info('Base model ----- [train test] loss =[%f %f] acc=[%f %f]' %
+                (base_train_loss, base_test_loss, base_train_acc, base_test_acc))
+
+    train_class.eval_test_during_train = True
     model_erm, train_loss, test_loss = train_class.train_model(model_erm, dataloaders,
                                                                params_fit_to_sample['epochs'])
     ############################
@@ -123,7 +128,7 @@ def run_experiment(experiment_type: str):
 
         # NML training- train the model with test sample
         execute_pnml_training(params_fit_to_sample, dataloaders, sample_test_data, sample_test_true_label, idx,
-                              model_base, logger, genie_only_training=True, adv_train=False)
+                              model_base, logger, genie_only_training=False, adv_train=False)
 
         # Log and save
         logger.save_json_file()
@@ -137,6 +142,8 @@ if __name__ == "__main__":
     parser.add_argument('-t', '--experiment_type', default='mnist_adversarial',
                         help='Type of experiment to execute',
                         type=str)
+    parser.add_argument('-f', '--first_idx', default=None, help='first test idx', type=int)
+    parser.add_argument('-l', '--last_idx', default=None, help='last test idx', type=int)
     args = vars(parser.parse_args())
 
     # Available experiment_type:
@@ -146,5 +153,5 @@ if __name__ == "__main__":
     #   'out_of_dist_noise'
     #   'pnml_mnist'
 
-    run_experiment(args['experiment_type'])
+    run_experiment(args['experiment_type'], args['first_idx'], args['last_idx'])
     print('Finish experiment')

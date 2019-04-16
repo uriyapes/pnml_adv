@@ -10,7 +10,7 @@ from torchvision import transforms, datasets
 
 from resnet import load_pretrained_resnet32_cifar10_model
 from resnet import resnet32
-from mpl import Net
+from mpl import Net, Net_800_400_100
 
 
 # Normalization for CIFAR10 dataset
@@ -75,7 +75,8 @@ def create_adversarial_mnist_sign_dataset(data_dir, load_sign_dataset, adversari
         print("Load:" + adversarial_sign_dataset_path)
         return
 
-    model = Net()
+    # model = Net()
+    model = Net_800_400_100()
     model.load_state_dict(torch.load(create_sign_dataset_model_path))
     normalize_mnist = transforms.Normalize(mean=[0.1307], std=[0.3081])
 
