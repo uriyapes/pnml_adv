@@ -90,25 +90,29 @@ def load_dict_from_file_list(files):
     return result_dict
 
 
-def load_results_to_df(files, is_random_labels=False, is_out_of_dist=False):
+def load_results_to_df(files, is_random_labels=False, is_out_of_dist=False, idx=None):
     results_dict = load_dict_from_file_list(files)
 
     # NML
     pnml_df = result_dict_to_nml_df(results_dict, is_random_labels=is_random_labels, is_out_of_dist=is_out_of_dist)
-    statistic_pnml_df = calc_statistic_from_df_single(pnml_df).rename(columns={'statistics': 'nml'})
+    if idx is None: # if not idx is given (empty set) then take all the indexes
+        idx = pnml_df.index.values
+    else:
+        idx = set(idx)
+    statistic_pnml_df = calc_statistic_from_df_single(pnml_df.loc[idx]).rename(columns={'statistics': 'nml'})
     pnml_df = pnml_df.add_prefix('nml_')
     pnml_df = pnml_df.rename(columns={'nml_log10_norm_factor': 'log10_norm_factor'})
 
     # ERM
     erm_df = result_dict_to_erm_df(results_dict, is_random_labels=is_random_labels, is_out_of_dist=is_out_of_dist)
-    statistic_erm_df = calc_statistic_from_df_single(erm_df).rename(columns={'statistics': 'erm'})
+    statistic_erm_df = calc_statistic_from_df_single(erm_df.loc[idx]).rename(columns={'statistics': 'erm'})
     erm_df = erm_df.add_prefix('erm_')
 
     # genie
     genie_df, statistic_genie_df = None, None
     if is_out_of_dist is False:
         genie_df = result_dict_to_genie_df(results_dict, is_random_labels=is_random_labels)
-        statistic_genie_df = calc_statistic_from_df_single(genie_df).rename(columns={'statistics': 'genie'})
+        statistic_genie_df = calc_statistic_from_df_single(genie_df.loc[idx]).rename(columns={'statistics': 'genie'})
         genie_df = genie_df.add_prefix('genie_')
 
     # Merge and return
@@ -281,6 +285,99 @@ def create_twice_univ_df(results_df_list: list):
 
     return twice_df, idx_common
 
+def create_genie_tu_df(results_df_list):
+    """
+    TU genie pick the lower loss between all models for each test point in the testset.
+    """
+    if not results_df_list:
+        print('Got empty list!')
+        return [], None
+
+    results_df_list, idx_common = get_testset_intersections_from_results_dfs(results_df_list)
+
+    # Twice Dataframe creation .
+    genie_tu_df = pd.DataFrame.copy(results_df_list[0], deep=True)
+    genie_tu_df = genie_tu_df.loc[idx_common]
+
+
+    loss_list = []
+    for df in results_df_list:
+        loss_list.append(df['loss'])
+    df_index_min_loss = np.argmin(loss_list, axis=0).tolist()  # find the dataframe index with the lowest loss
+
+    for ii in idx_common:
+        # print("choose df idx={}".format(df_index_min_loss[ii]))
+        assert (np.isclose(results_df_list[df_index_min_loss[ii]].loc[ii][[str(x) for x in range(10)]].sum(), 1.0, rtol=1e-04))
+        genie_tu_df.loc[ii] = results_df_list[df_index_min_loss[ii]].loc[ii]
+    genie_tu_df["selected_df"] = df_index_min_loss
+
+    return genie_tu_df, idx_common
+
+def create_risk_minimizer_df(results_df_list):
+    """ create_risk_minimizer_df - risk minimizer picks the lower risk between all models for each test point
+    in the testset"""
+    if not results_df_list:
+        print('Got empty list!')
+        return [], None
+
+    results_df_list, idx_common = get_testset_intersections_from_results_dfs(results_df_list)
+
+    # Twice Dataframe creation .
+    risk_min_df = pd.DataFrame.copy(results_df_list[0], deep=True)
+    risk_min_df = risk_min_df.loc[idx_common]
+
+
+    risk_list = []
+    for df in results_df_list:
+        risk_list.append(df['log10_norm_factor'])
+    df_index_min_risk = np.argmin(risk_list, axis=0).tolist()  # find the dataframe index with the lowest loss
+
+    for ii in idx_common:
+        # print("choose df idx={}".format(df_index_min_risk[ii]))
+        risk_min_df.loc[ii] = results_df_list[df_index_min_risk[ii]].loc[ii]
+    risk_min_df["selected_df"] = df_index_min_risk
+
+    return risk_min_df, idx_common
+
+
+def create_bagging_df(results_df_list):
+    """create_bagging_df - Bagging is an ensemble learning technique in which the probabilities of all models are
+    averaged."""
+    if not results_df_list:
+        print('Got empty list!')
+        return [], None
+
+    results_df_list, idx_common = get_testset_intersections_from_results_dfs(results_df_list)
+
+    # Bagging dataframe creation. Average label predictions for each index (sample)
+    bagging_df = pd.DataFrame(columns=[str(x) for x in range(10)], index=idx_common)
+    bagging_df[[str(x) for x in range(10)]] = 0
+    for i in range(len(results_df_list)):
+        bagging_df = bagging_df.add(results_df_list[i][[str(x) for x in range(10)]])
+
+    bagging_df = bagging_df.divide(len(results_df_list), axis='index')
+
+
+    # Add true label column
+    bagging_df['true_label'] = results_df_list[0]['true_label'].astype(int)
+
+    # assign is_correct columns
+    is_correct = np.array(bagging_df[[str(x) for x in range(10)]].idxmax(axis=1)).astype(int) == np.array(
+        bagging_df['true_label'])
+    bagging_df['is_correct'] = is_correct
+
+    # assign loss and entropy
+    loss = []
+    entropy_list = []
+    for index, row in bagging_df.iterrows():
+        loss.append(-np.log10(row[str(int(row['true_label']))]))
+        entropy_list.append(entropy(np.array(row[[str(x) for x in range(10)]]).astype(float)))
+        assert(np.isclose(row[[str(x) for x in range(10)]].sum(), 1.0, rtol=1e-04))
+    bagging_df['loss'] = loss
+    bagging_df['entropy'] = entropy_list
+
+    return bagging_df, idx_common
+
 
 def calc_erm_and_genie_stats(results_df_list):
     results_dict = load_dict_from_file_list(results_df_list)
@@ -313,21 +410,41 @@ def find_results_in_path(path_to_folder:str):
 
 
 if __name__ == "__main__":
-    # Example
-    json_file_name = os.path.join('.', 'results_example.json')
-    with open(json_file_name) as data_file:
-        results_dict_sample = json.load(data_file)
-    nml_df_sample = result_dict_to_nml_df(results_dict_sample)
+    # # Example
+    # json_file_name = os.path.join('.', 'results_example.json')
+    # with open(json_file_name) as data_file:
+    #     results_dict_sample = json.load(data_file)
+    # nml_df_sample = result_dict_to_nml_df(results_dict_sample)
+    #
+    # tic = time.time()
+    # result_df_sample, statistics_df_sample = load_results_to_df([json_file_name])
+    # print('load_results_to_df: {0:.2f} [s]'.format(time.time() - tic))
+    # tic = time.time()
+    # nml_df = result_dict_to_nml_df(results_dict_sample)
+    # print('result_dict_to_nml_df: {0:.2f} [s]'.format(time.time() - tic))
+    # tic = time.time()
+    # statistic = calc_statistic_from_df_single(nml_df)
+    # print('calc_statistic_from_df_single: {0:.2f} [s]'.format(time.time() - tic))
+    #
+    # a, b = create_twice_univ_df([nml_df, nml_df])
+    # print('Done!')
 
-    tic = time.time()
-    result_df_sample, statistics_df_sample = load_results_to_df([json_file_name])
-    print('load_results_to_df: {0:.2f} [s]'.format(time.time() - tic))
-    tic = time.time()
-    nml_df = result_dict_to_nml_df(results_dict_sample)
-    print('result_dict_to_nml_df: {0:.2f} [s]'.format(time.time() - tic))
-    tic = time.time()
-    statistic = calc_statistic_from_df_single(nml_df)
-    print('calc_statistic_from_df_single: {0:.2f} [s]'.format(time.time() - tic))
+    M11_path = ['./../results/deep_net/twice_univ/M11/results_mnist_adversarial_20190416_164500.json']
+    M12_path = ['./../results/deep_net/twice_univ/M12/results_mnist_adversarial_20190416_164641.json']
+    M13_path = ['./../results/deep_net/twice_univ/M13/results_mnist_adversarial_20190416_164806.json']
+    M14_path = ['./../results/deep_net/twice_univ/M14A/results_mnist_adversarial_20190417_153920.json',
+                './../results/deep_net/twice_univ/M14B/results_mnist_adversarial_20190417_153958.json']
+    M21_path = ['./../results/deep_net/twice_univ/M21/results_mnist_adversarial_20190416_165007.json']
+    M22_path = ['./../results/deep_net/twice_univ/M22/results_mnist_adversarial_20190416_165127.json']
+    M23_path = ['./../results/deep_net/twice_univ/M23/results_mnist_adversarial_20190416_165303.json']
+    M24_path = ['./../results/deep_net/twice_univ/M24A/results_mnist_adversarial_20190417_154137.json',
+                './../results/deep_net/twice_univ/M24B/results_mnist_adversarial_20190417_154214.json']
 
-    a, b = create_twice_univ_df([nml_df, nml_df])
-    print('Done!')
+    M1 = result_dict_to_nml_df(load_dict_from_file_list(M11_path))
+    print('loaded 0 layers MNIST, {} samples'.format(M1.shape[0]))
+    M2 = result_dict_to_nml_df(load_dict_from_file_list(M21_path))
+    print('loaded 1 layers MNIST, {} samples'.format(M2.shape[0]))
+
+    twice_df, idx_common = create_genie_tu_df([M1, M2])#create_twice_univ_df
+    statistic_genie_df = calc_statistic_from_df_single(twice_df).rename(columns={'statistics': 'genie'})
+    print(statistic_genie_df)
