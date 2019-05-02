@@ -15,7 +15,10 @@ mean_cifar10 = [0.485, 0.456, 0.406]
 std_cifar10 = [0.229, 0.224, 0.225]
 normalize = transforms.Normalize(mean=mean_cifar10, std=std_cifar10)
 mnist_std = 0.3081
-
+mean_mnist = 0.1307
+normalize_mnist = transforms.Normalize(mean=[mean_mnist], std=[mnist_std])
+mnist_max_val = (1 - mean_mnist) / mnist_std
+mnist_min_val = (0 - mean_mnist) / mnist_std
 
 def insert_sample_to_dataset(trainloader, sample_to_insert_data, sample_to_insert_label):
     """
@@ -260,13 +263,11 @@ def create_mnist_dataloaders(data_dir: str = './data', batch_size: int = 128, nu
     :return: train and test loaders along with mapping between labels and class names
     """
 
-    # Normalization for MNIST dataset
-    normalize_mist = transforms.Normalize(mean=[0.1307], std=[0.3081])
     trainset = datasets.MNIST(root=data_dir,
                               train=True,
                               download=True,
                               transform=transforms.Compose([transforms.ToTensor(),
-                                                            normalize_mist]))
+                                                            normalize_mnist]))
     trainloader = data.DataLoader(trainset,
                                   batch_size=batch_size,
                                   shuffle=False,
@@ -276,7 +277,7 @@ def create_mnist_dataloaders(data_dir: str = './data', batch_size: int = 128, nu
                              train=False,
                              download=True,
                              transform=transforms.Compose([transforms.ToTensor(),
-                                                           normalize_mist]))
+                                                           normalize_mnist]))
     testloader = data.DataLoader(testset,
                                  batch_size=batch_size,
                                  shuffle=False,
@@ -428,7 +429,6 @@ def create_adversarial_mnist_dataloaders(data_dir: str = './data', load_sign_dat
     # Normalization for MNIST dataset
     create_adversarial_mnist_sign_dataset(data_dir, load_sign_dataset, adversarial_sign_dataset_path, create_sign_dataset_model_path)
 
-    normalize_mnist = transforms.Normalize(mean=[0.1307], std=[0.3081])
     trainset = datasets.MNIST(root=data_dir,
                               train=True,
                               download=True,

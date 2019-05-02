@@ -9,8 +9,8 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 from torch import nn
-
-from dataset_utilities import insert_sample_to_dataset, mnist_std
+from adversarial.attacks import FGSM, PGD
+from dataset_utilities import insert_sample_to_dataset, mnist_min_val, mnist_max_val
 
 
 class TrainClass:
@@ -19,7 +19,7 @@ class TrainClass:
     """
 
     def __init__(self, params_to_train, learning_rate: float, momentum: float, step_size: list, gamma: float,
-                 weight_decay: float, logger=None, adv_learn_alpha=0, adv_learn_eps=0.05):
+                 weight_decay: float, logger=None, adv_learn_alpha=0, adv_learn_eps=0.05, attack_type: str = 'pgd'):
         """
         Initialize train class object.
         :param params_to_train: the parameters of pytorch Module that will be trained.
@@ -30,6 +30,7 @@ class TrainClass:
         :param weight_decay: L2 regularization.
         :param logger: logger class in order to print logs and save results.
         :param adv_learn_alpha: The weight that should be given to the adversarial learning regulaizer (0 means none).
+        :param attack_type: options: fgsm, pgd and none
         """
 
         self.num_epochs = 20
@@ -50,6 +51,7 @@ class TrainClass:
         self.freeze_batch_norm = True
         self.adv_learn_alpha = adv_learn_alpha
         self.adv_learn_eps = adv_learn_eps
+        self.attack_type = attack_type
 
     def train_model(self, model, dataloaders, num_epochs: int = 10, acc_goal=None,
                     sample_test_data=None, sample_test_true_label=None):
@@ -63,6 +65,12 @@ class TrainClass:
                  and the loss of the trainset and testset.
         """
         model = model.cuda() if torch.cuda.is_available() else model
+        if self.attack_type == 'fgsm':
+            attack = FGSM(model, self.criterion, self.adv_learn_eps, (mnist_min_val, mnist_max_val))
+        elif self.attack_type == 'pgd':
+            attack = PGD(model, self.criterion, self.adv_learn_eps, 30, 0.01, (mnist_min_val, mnist_max_val))
+        else:
+            attack = None
         self.num_epochs = num_epochs
         train_loss, train_acc = torch.tensor([-1.]), torch.tensor([-1.])
         epoch_time = 0
@@ -72,7 +80,7 @@ class TrainClass:
         for epoch in range(self.num_epochs):
 
             epoch_start_time = time.time()
-            total_loss_in_epoch, train_loss, train_acc = self.__train(model, dataloaders['train'],
+            total_loss_in_epoch, train_loss, train_acc = self.__train(model, dataloaders['train'], attack,
                                                                       sample_test_data, sample_test_true_label)
             if self.eval_test_during_train is True:
                 test_loss, test_acc = self.eval(model, dataloaders['test'])
@@ -101,7 +109,7 @@ class TrainClass:
         test_loss_output = float(test_loss.cpu().detach().numpy().round(16))
         return model, train_loss_output, test_loss_output
 
-    def __train(self, model, train_loader, sample_test_data=None, sample_test_true_label=None):
+    def __train(self, model, train_loader, attack, sample_test_data=None, sample_test_true_label=None):
         """
         Execute one epoch of training
         :param model: the model that will be trained.
@@ -131,14 +139,10 @@ class TrainClass:
             # Adjust to CUDA
             images = images.cuda() if torch.cuda.is_available() else images
             labels = labels.cuda() if torch.cuda.is_available() else labels
-            if self.adv_learn_alpha is not 0:
-                images.requires_grad = True
 
             # Forward
             self.optimizer.zero_grad()
             outputs, loss = self.__forward_pass(model, images, labels)
-            # outputs = model(images)
-            # loss = self.criterion(outputs, labels)  # Negative log-loss
             _, predicted = torch.max(outputs.data, 1)
             correct += (predicted == labels).sum().item()
             train_loss += loss * len(images)  # loss sum for the epoch
@@ -148,15 +152,10 @@ class TrainClass:
             if self.adv_learn_alpha is 0:
                 loss.backward()
             else:
-                # The loss is averaged over the minibatch, this doesn't matter at all since the loss magnitude
-                # is only just to determine gradient sign. Each pixel is changed by -+epsilon, no matter
-                # it's gradient magnitude.
-                loss.backward(retain_graph=True)
-                img_grad = images.grad.data
-                img_grad_eps = img_grad.sign() * self.adv_learn_eps * (1/mnist_std) # Normalization by std expand the value range TODO: change to generic dataset std
-                adv_images = images.data + img_grad_eps
-                torch.clamp(adv_images, 0, 1)
-                images.requires_grad = False
+                # # The loss is averaged over the minibatch, this doesn't matter at all since the loss magnitude
+                # # is only just to determine gradient sign. Each pixel is changed by -+epsilon, no matter
+                # # it's gradient magnitude.
+                adv_images = attack.create_adversarial_sample(images, labels)
                 self.optimizer.zero_grad()
 
                 #### add another sample
@@ -221,6 +220,7 @@ class TrainClass:
         acc = correct / len(dataloader.dataset)
         loss /= len(dataloader.dataset)
         return loss, acc
+
 
 def eval_single_sample(model, test_sample_data):
     """
