@@ -6,6 +6,7 @@ import os.path
 import torch
 from torch.utils import data
 from torchvision import transforms, datasets
+from PIL import Image
 
 from adversarial_utilities import create_adversarial_sign_dataset, create_adversarial_mnist_sign_dataset
 from noise_dataset_class import NoiseDataset
@@ -19,6 +20,8 @@ mean_mnist = 0.1307
 normalize_mnist = transforms.Normalize(mean=[mean_mnist], std=[mnist_std])
 mnist_max_val = (1 - mean_mnist) / mnist_std
 mnist_min_val = (0 - mean_mnist) / mnist_std
+assert(np.isclose(1/mnist_std, mnist_max_val - mnist_min_val))
+
 
 def insert_sample_to_dataset(trainloader, sample_to_insert_data, sample_to_insert_label):
     """
@@ -254,39 +257,6 @@ def create_cifar10_random_label_dataloaders(data_dir: str = './data', batch_size
     return trainloader, testloader, classes
 
 
-def create_mnist_dataloaders(data_dir: str = './data', batch_size: int = 128, num_workers: int = 4):
-    """
-    create train and test pytorch dataloaders for MNIST dataset
-    :param data_dir: the folder that will contain the data
-    :param batch_size: the size of the batch for test and train loaders
-    :param num_workers: number of cpu workers which loads the GPU with the dataset
-    :return: train and test loaders along with mapping between labels and class names
-    """
-
-    trainset = datasets.MNIST(root=data_dir,
-                              train=True,
-                              download=True,
-                              transform=transforms.Compose([transforms.ToTensor(),
-                                                            normalize_mnist]))
-    trainloader = data.DataLoader(trainset,
-                                  batch_size=batch_size,
-                                  shuffle=False,
-                                  num_workers=num_workers)
-
-    testset = datasets.MNIST(root=data_dir,
-                             train=False,
-                             download=True,
-                             transform=transforms.Compose([transforms.ToTensor(),
-                                                           normalize_mnist]))
-    testloader = data.DataLoader(testset,
-                                 batch_size=batch_size,
-                                 shuffle=False,
-                                 num_workers=num_workers)
-    classes = ('0', '1', '2', '3', '4', '5', '6', '7', '8', '9')
-
-    return trainloader, testloader, classes
-
-
 def dataloaders_noise(data_dir: str = './data', batch_size: int = 128, num_workers: int = 4):
     """
     create trainloader for CIFAR10 dataset and testloader with noise images
@@ -410,6 +380,64 @@ class MnistAdversarial(datasets.MNIST):
         self.test_data = self.test_data.type(torch.uint8)
         assert(self.test_data.min() >= 0)
 
+
+class MnistAdversarialTest(datasets.MNIST):
+    """
+    Implementing adversarial attack on MNIST testset.
+    """
+
+    def __init__(self, attack, transform, **kwargs):
+        """
+
+        :param attack: the attack that will be activate on the original MNIST testset
+        :param transform: use the transform (for dataset normalizations) prior to using the attack
+        :param kwargs: initial init arguments for datasets.MNIST.
+        """
+        super(MnistAdversarialTest, self).__init__(**kwargs)
+        assert(self.train is False)
+        grp_size = 10
+        test_adv_data = torch.zeros([len(self.test_data), 1, 28, 28])
+        for index in range(int(self.test_data.shape[0])):
+            # use the transform on all the testset
+            img = Image.fromarray(self.test_data[index].numpy(), mode='L')
+            test_adv_data[index] = transform(img)
+
+        self.test_data = test_adv_data
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        for index in range(int(self.test_data.shape[0] / grp_size)):
+            # save the adversarial testset
+
+            self.test_data[index*grp_size:(index+1)*grp_size] = attack.create_adversarial_sample(
+                                                self.test_data[index*grp_size:(index+1)*grp_size].to(device),
+                                                self.test_labels[index*grp_size:(index+1)*grp_size].to(device))
+
+        self.test_data = self.test_data.to("cpu")
+        self.transform = self.null_transform
+
+    def __getitem__(self, index):
+        """
+        Overwrite __getitem__  from datasets.MNIST in order to return pre-saved adversarial values
+        Args:
+            index (int): Index
+
+        Returns:
+            tuple: (image, target) where target is index of the target class.
+        """
+
+        target = self.test_labels[index]
+        if self.target_transform is not None:
+            target = self.target_transform(target)
+        img = self.test_data[index]
+        return img, target
+
+    @staticmethod
+    def null_transform(x):
+        """
+        Overwrite the transform in datasets.MNIST (None) and return the input.
+        """
+        return x
+
+
 def create_adversarial_mnist_dataloaders(data_dir: str = './data', load_sign_dataset:bool = True,
                                          adversarial_sign_dataset_path: str =  os.path.join('data', 'mnist_adversarial_sign_batch'),
                                             create_sign_dataset_model_path: str = "./models/mnist_adversarial_model_adv_train_1.pt",
@@ -454,6 +482,33 @@ def create_adversarial_mnist_dataloaders(data_dir: str = './data', load_sign_dat
                                  num_workers=num_workers,
                                  pin_memory=True)
 
+    classes = ('0', '1', '2', '3', '4', '5', '6', '7', '8', '9')
+
+    return trainloader, testloader, classes
+
+
+def create_adv_mnist_test_dataloader(attack, data_dir: str = './data', batch_size: int = 128, num_workers: int = 4):
+    """
+    create train and test pytorch dataloaders for MNIST dataset
+    :param attack: get instace of the adversarial attack
+    :param data_dir: the folder that will contain the data
+    :param batch_size: the size of the batch for test and train loaders
+    :param num_workers: number of cpu workers which loads the GPU with the dataset
+    :return: train and test loaders along with mapping between labels and class names
+    """
+    print("create_adversarial_mnist_dataloaders...")
+    testset = MnistAdversarialTest(root=data_dir,
+                               train=False,
+                               download=True,
+                               transform=transforms.Compose([transforms.ToTensor(),
+                                                             normalize_mnist]),
+                               attack=attack)
+
+    testloader = data.DataLoader(testset,
+                                 batch_size=batch_size,
+                                 shuffle=False,
+                                 num_workers=num_workers,
+                                 pin_memory=True)
 
     # testset = datasets.MNIST(root=data_dir,
     #                          train=False,
@@ -467,4 +522,53 @@ def create_adversarial_mnist_dataloaders(data_dir: str = './data', load_sign_dat
     #                              num_workers=num_workers)
     classes = ('0', '1', '2', '3', '4', '5', '6', '7', '8', '9')
 
+    return testloader, classes
+
+
+def create_mnist_dataloaders(data_dir: str = './data', batch_size: int = 128, num_workers: int = 4):
+    """
+    create train and test pytorch dataloaders for MNIST dataset
+    :param data_dir: the folder that will contain the data
+    :param batch_size: the size of the batch for test and train loaders
+    :param num_workers: number of cpu workers which loads the GPU with the dataset
+    :return: train and test loaders along with mapping between labels and class names
+    """
+
+    trainloader, _ = create_mnist_train_dataloader(data_dir, batch_size, num_workers)
+
+    testset = datasets.MNIST(root=data_dir,
+                             train=False,
+                             download=True,
+                             transform=transforms.Compose([transforms.ToTensor(),
+                                                           normalize_mnist]))
+    testloader = data.DataLoader(testset,
+                                 batch_size=batch_size,
+                                 shuffle=False,
+                                 num_workers=num_workers)
+    classes = ('0', '1', '2', '3', '4', '5', '6', '7', '8', '9')
+
     return trainloader, testloader, classes
+
+
+def create_mnist_train_dataloader(data_dir: str = './data', batch_size: int = 128, num_workers: int = 4):
+    """
+    create train and test pytorch dataloaders for MNIST dataset
+    :param data_dir: the folder that will contain the data
+    :param batch_size: the size of the batch for test and train loaders
+    :param num_workers: number of cpu workers which loads the GPU with the dataset
+    :return: train and test loaders along with mapping between labels and class names
+    """
+
+    trainset = datasets.MNIST(root=data_dir,
+                              train=True,
+                              download=True,
+                              transform=transforms.Compose([transforms.ToTensor(),
+                                                            normalize_mnist]))
+    trainloader = data.DataLoader(trainset,
+                                  batch_size=batch_size,
+                                  shuffle=False,
+                                  num_workers=num_workers)
+
+    classes = ('0', '1', '2', '3', '4', '5', '6', '7', '8', '9')
+
+    return trainloader, classes

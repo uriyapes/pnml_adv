@@ -9,22 +9,39 @@ class Attack(ABC):
         raise NotImplementedError
 
 
+class NoAttack(Attack):
+    def __init__(self):
+        super(NoAttack, self).__init__()
+
+    def create_adversarial_sample(self, x: torch.Tensor, y: torch.Tensor):
+        return x
+
+
 class FGSM(Attack):
     """Implements the Fast Gradient-Sign Method (FGSM).
 
     FGSM is a white box attack.
-    clamp: Max and minimum values of elements in the samples i.e. (0, 1) for MNIST
+
     """
     def __init__(self,
                  model: Module,
                  loss_fn: Callable,
-                 eps: float,
+                 eps_ratio: float,
                  clamp: Tuple[float, float] = (0, 1)):
+        """
+        :param model: the model which will be used to create the adversarial examples, pay attention that as the model
+        changes (by training) so is the adversarial examples created
+        :param loss_fn: the loss function which the adversarial example tries to maximize
+        :param eps_ratio: the L_infinity norm max value units of the total range of the allowed change (meaning that the
+        epsilon value is adjusted for different images value ranges).
+        :param: clamp: Max and minimum values of elements in the samples i.e. (0, 1) for MNIST
+        """
         super(FGSM, self).__init__()
         self.model = model
         self.loss_fn = loss_fn
-        self.eps = eps
+        self.eps_ratio = eps_ratio
         self.clamp = clamp
+        self.eps = self.eps_ratio * (1/(self.clamp[1] - self.clamp[0]))
 
     def create_adversarial_sample(self,
                                   x: torch.Tensor,
@@ -32,12 +49,13 @@ class FGSM(Attack):
         """Creates an adversarial sample
 
         Args:
-            x: Batch of samples
-            y: Corresponding labels
+            :param: x: Batch of samples
+            :param: y: Corresponding labels
 
         Returns:
             x_adv: Adversarially perturbed version of x
         """
+
         return fgsm(self.model, x, y, self.loss_fn, self.eps, self.clamp)
 
 
@@ -46,7 +64,7 @@ class PGD(Attack):
     def __init__(self,
                  model: Module,
                  loss_fn: Callable,
-                 eps: float,
+                 eps_ratio: float,
                  k: int,
                  step: float,
                  clamp: Tuple[float, float] = (0, 1),
@@ -54,11 +72,12 @@ class PGD(Attack):
         super(PGD, self).__init__()
         self.model = model
         self.loss_fn = loss_fn
-        self.eps = eps
+        self.eps_ratio = eps_ratio
         self.step = step
         self.k = k
         self.norm = norm
         self.clamp = clamp
+        self.eps = self.eps_ratio * (1 / (self.clamp[1] - self.clamp[0]))
 
     def create_adversarial_sample(self,
                                   x: torch.Tensor,
@@ -119,4 +138,19 @@ class Boundary(Attack):
                                   initial: torch.Tensor = None,
                                   clamp: Tuple[float, float] = (0, 1)) -> torch.Tensor:
         return boundary(model, x, y, self.orthogonal_step, self.perpendicular_step, self.k, initial, clamp)
+
+
+def get_attack(attack_type: str, model: Module = None, eps: float = 0.3, iter: int = 30, step_size: float = 0.01,
+                 clamp: Tuple[float, float] = (0, 1), loss_fn: Callable = torch.nn.CrossEntropyLoss()):
+    if attack_type == 'no_attack':
+        attack = NoAttack()
+    elif attack_type == 'fgsm':
+        attack = FGSM(model, loss_fn, eps, clamp)
+    elif attack_type == 'pgd':
+        attack = PGD(model, loss_fn, eps, iter, step_size, clamp)
+    else:
+        raise NameError('No attack named %s' % attack_type)
+
+    return attack
+
 

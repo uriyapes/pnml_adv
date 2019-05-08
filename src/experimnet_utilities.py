@@ -1,6 +1,6 @@
 import os
 
-from dataset_utilities import create_adversarial_mnist_dataloaders
+from dataset_utilities import create_adversarial_mnist_dataloaders, create_mnist_train_dataloader, create_adv_mnist_test_dataloader
 from dataset_utilities import create_adversarial_cifar10_dataloaders
 from dataset_utilities import create_cifar10_dataloaders
 from dataset_utilities import create_cifar10_random_label_dataloaders
@@ -8,7 +8,7 @@ from dataset_utilities import create_mnist_dataloaders
 from dataset_utilities import create_svhn_dataloaders
 from dataset_utilities import dataloaders_noise
 from adversarial_utilities import create_adversarial_mnist_sign_dataset
-from mpl import Net, Net_800_400_100
+from mpl import Net, Net_800_400_100, MNISTClassifier, load_pretrained_model
 from resnet import resnet20, load_pretrained_resnet20_cifar10_model
 from wide_resnet import WideResNet
 
@@ -28,7 +28,6 @@ class Experiment:
         self.executed_get_params = False
         self.first_idx=first_idx
         self.last_idx = last_idx
-
 
     def get_params(self):
         if self.exp_type == 'pnml_cifar10':
@@ -56,7 +55,7 @@ class Experiment:
         self.executed_get_params = True
         return self.params
 
-    def get_dataloaders(self, data_folder: str = './data'):
+    def get_dataloaders(self, data_folder: str = './data', testset_black_box_attack=None):
 
         if self.executed_get_params is False:
             _ = self.get_params()
@@ -111,22 +110,30 @@ class Experiment:
                            'test': testloader,
                            'classes': classes}
         elif self.exp_type == 'mnist_adversarial':
-            trainloader, testloader, classes = create_adversarial_mnist_dataloaders(data_folder,
-                                                                                    self.params["adv_attack"]["load_sign_dataset"],
-                                                                                    self.params["adv_attack"]["sign_dataset_path"],
-                                                                                    self.params["adv_attack"]["create_sign_dataset_model_path"],
-                                                                                    self.params["adv_attack"]['epsilon'],
-                                                                                    self.params['batch_size'],
-                                                                                    self.params['num_workers'])
-            dataloaders = {'train': trainloader,
-                           'test': testloader,
-                           'classes': classes}
+            dataloaders = {}
+            trainloader, classes = create_mnist_train_dataloader(data_folder, self.params['batch_size'],
+                                                                 self.params['num_workers'])
+            dataloaders['train'] = trainloader
+            dataloaders['classes'] = classes
+            if testset_black_box_attack is not None:
+                testloader, _ = create_adv_mnist_test_dataloader(testset_black_box_attack, data_folder, self.params['batch_size'], self.params['num_workers'])
+                dataloaders['test'] = testloader
+                # trainloader, testloader, classes = create_adversarial_mnist_dataloaders(data_folder,
+                #                                                                         self.params["adv_attack"]["load_sign_dataset"],
+                #                                                                         self.params["adv_attack"]["sign_dataset_path"],
+                #                                                                         self.params["adv_attack"]["create_sign_dataset_model_path"],
+                #                                                                         self.params["adv_attack"]['epsilon'],
+                #                                                                         self.params['batch_size'],
+                #                                                                         self.params['num_workers'])
+                # dataloaders = {'train': trainloader,
+                #                'test': testloader,
+                #                'classes': classes}
         else:
             raise NameError('No experiment type: %s' % self.exp_type)
 
         return dataloaders
 
-    def get_model(self):
+    def get_model(self, model_arch: str = None):
 
         if self.exp_type == 'pnml_cifar10':
             model = load_pretrained_resnet20_cifar10_model(resnet20())
@@ -141,8 +148,14 @@ class Experiment:
         elif self.exp_type == 'adversarial':
             model = load_pretrained_resnet20_cifar10_model(resnet20())
         elif self.exp_type == 'mnist_adversarial':
-            # model = Net()
-            model = Net_800_400_100()
+            if model_arch == 'Net':
+                model = Net()
+            elif model_arch == 'Net_800_400_100':
+                model = Net_800_400_100()
+            elif model_arch == 'MNISTClassifier':
+                model = MNISTClassifier()
+            else:
+                raise NameError('No model_arch type %s' % str(model_arch))
         else:
             raise NameError('No experiment type: %s' % self.exp_type)
 

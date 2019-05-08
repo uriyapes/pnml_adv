@@ -9,7 +9,7 @@ import torch
 import torch.nn.functional as F
 import torch.optim as optim
 from torch import nn
-from adversarial.attacks import FGSM, PGD
+from adversarial.attacks import get_attack
 from dataset_utilities import insert_sample_to_dataset, mnist_min_val, mnist_max_val
 
 
@@ -19,7 +19,8 @@ class TrainClass:
     """
 
     def __init__(self, params_to_train, learning_rate: float, momentum: float, step_size: list, gamma: float,
-                 weight_decay: float, logger=None, adv_learn_alpha=0, adv_learn_eps=0.05, attack_type: str = 'pgd'):
+                 weight_decay: float, logger=None, adv_learn_alpha=0, adv_learn_eps=0.05, attack_type: str = 'pgd',
+                 pgd_iter: int = 30, pgd_step: float = 0.01):
         """
         Initialize train class object.
         :param params_to_train: the parameters of pytorch Module that will be trained.
@@ -52,6 +53,8 @@ class TrainClass:
         self.adv_learn_alpha = adv_learn_alpha
         self.adv_learn_eps = adv_learn_eps
         self.attack_type = attack_type
+        self.pgd_iter = pgd_iter
+        self.pgd_step = pgd_step
 
     def train_model(self, model, dataloaders, num_epochs: int = 10, acc_goal=None,
                     sample_test_data=None, sample_test_true_label=None):
@@ -65,12 +68,9 @@ class TrainClass:
                  and the loss of the trainset and testset.
         """
         model = model.cuda() if torch.cuda.is_available() else model
-        if self.attack_type == 'fgsm':
-            attack = FGSM(model, self.criterion, self.adv_learn_eps, (mnist_min_val, mnist_max_val))
-        elif self.attack_type == 'pgd':
-            attack = PGD(model, self.criterion, self.adv_learn_eps, 30, 0.01, (mnist_min_val, mnist_max_val))
-        else:
-            attack = None
+        attack = get_attack(self.attack_type, model, self.adv_learn_eps, self.pgd_iter, self.pgd_step,
+                            (mnist_min_val, mnist_max_val))
+
         self.num_epochs = num_epochs
         train_loss, train_acc = torch.tensor([-1.]), torch.tensor([-1.])
         epoch_time = 0
@@ -99,14 +99,16 @@ class TrainClass:
             # Stop training if desired goal is achieved
             if acc_goal is not None and train_acc >= acc_goal:
                 break
-        test_loss, test_acc = self.eval(model, dataloaders['test'])
+        # test_loss, test_acc = self.eval(model, dataloaders['test']) # TODO: UNCOMMENT AND DELETE NEXT LINE
+        test_loss, test_acc = 0, 0
 
         # Print and save
         self.logger.info('----- [train test] loss =[%f %f], adv_loss=[%f], acc=[%f %f] epoch_time=%.2f' %
                          (train_loss, test_loss, total_loss_in_epoch, train_acc, test_acc,
                           epoch_time))
         train_loss_output = float(train_loss.cpu().detach().numpy().round(16))
-        test_loss_output = float(test_loss.cpu().detach().numpy().round(16))
+        # test_loss_output = float(test_loss.cpu().detach().numpy().round(16))
+        test_loss_output = 0
         return model, train_loss_output, test_loss_output
 
     def __train(self, model, train_loader, attack, sample_test_data=None, sample_test_true_label=None):
@@ -130,8 +132,8 @@ class TrainClass:
 
             sample_test_data = sample_test_data.cuda() if torch.cuda.is_available() else sample_test_data
             sample_test_true_label = sample_test_true_label.cuda() if torch.cuda.is_available() else sample_test_true_label
-            sample_test_data.requires_grad=False
-            sample_test_true_label.requires_grad=False
+            sample_test_data.requires_grad = False
+            sample_test_true_label.requires_grad = False
 
         # Iterate over dataloaders
         for iter_num, (images, labels) in enumerate(train_loader):
@@ -257,12 +259,13 @@ def set_bn_eval(model):
         model.eval()
 
 
-def execute_pnml_training(train_params: dict, dataloaders_input: dict,
+def execute_pnml_training(train_params: dict, params_init_training: dict, dataloaders_input: dict,
                           sample_test_data, sample_test_true_label, idx: int,
                           model_base_input, logger, genie_only_training: bool=False, adv_train: bool=False):
     """
     Execute the PNML procedure: for each label train the model and save the prediction afterword.
     :param train_params: parameters of training the model for each label
+    :param train_class: the train_class is used to train and eval the model
     :param dataloaders_input: dataloaders which contains the trainset
     :param sample_test_data: the data of the test sample that will be evaluated
     :param sample_test_true_label: the true label of the test sample
@@ -301,20 +304,22 @@ def execute_pnml_training(train_params: dict, dataloaders_input: dict,
         time_trained_label_start = time.time()
 
         if adv_train:
-            # Insert test sample to train dataset and train the test sample with adversarial regularizer
-            dataloaders = deepcopy(dataloaders_input)
-            trainloader_with_sample = insert_sample_to_dataset(dataloaders['train'], sample_test_data, trained_label)
-            dataloaders['train'] = trainloader_with_sample
+            raise NotImplementedError('insert the sample to the train requires to take the sample before transform and attack')
+            # # Insert test sample to train dataset and train the test sample with adversarial regularizer
+            # dataloaders = deepcopy(dataloaders_input)
+            # trainloader_with_sample = insert_sample_to_dataset(dataloaders['train'], sample_test_data, trained_label)
+            # dataloaders['train'] = trainloader_with_sample
         else:
             sample_to_insert_label_expand = torch.tensor(np.expand_dims(trained_label, 0))  # make the label to tensor array type (important for loss calculation)
 
 
         # Execute transformation - for training and evaluating the test sample
-        sample_test_data_for_trans = copy.deepcopy(sample_test_data)
-        if len(sample_test_data.shape) == 2:
-            sample_test_data_for_trans = sample_test_data_for_trans.unsqueeze(2).numpy()
-        sample_test_data_trans = dataloaders_input['test'].dataset.transform(sample_test_data_for_trans)
-
+        # sample_test_data_for_trans = copy.deepcopy(sample_test_data)
+        # if len(sample_test_data.shape) == 2:
+        #     print("mek")
+        #     sample_test_data_for_trans = sample_test_data_for_trans.unsqueeze(2).numpy()
+        # sample_test_data_trans = dataloaders_input['test'].dataset.transform(sample_test_data_for_trans)
+        sample_test_data_trans = sample_test_data
 
 
         # Train model
@@ -323,12 +328,15 @@ def execute_pnml_training(train_params: dict, dataloaders_input: dict,
                                  train_params['lr'], train_params['momentum'], train_params['step_size'],
                                  train_params['gamma'], train_params['weight_decay'],
                                  logger.logger,
-                                 train_params["adv_alpha"], train_params["epsilon"])
+                                 params_init_training["adv_alpha"], params_init_training["epsilon"],
+                                 params_init_training["attack_type"], params_init_training["pgd_iter"],
+                                 params_init_training["pgd_step"]
+                                 )
         train_class.eval_test_during_train = True
         train_class.freeze_batch_norm = True
         # model, train_loss, test_loss = train_class.train_model(model, dataloaders, train_params['epochs'])
         if adv_train:
-            model, train_loss, test_loss = train_class.train_model(model, dataloaders, train_params['epochs'],
+            model, train_loss, test_loss = train_class.train_model(model, dataloaders_input, train_params['epochs'],
                                                                    sample_test_data=None,
                                                                    sample_test_true_label=None)
         else:

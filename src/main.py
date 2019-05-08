@@ -16,6 +16,9 @@ from experimnet_utilities import Experiment
 from logger_utilities import Logger
 from train_utilities import TrainClass, eval_single_sample, execute_pnml_training
 from train_utilities import freeze_model_layers
+from mpl import load_pretrained_model
+from attacks import get_attack
+from dataset_utilities import mnist_max_val, mnist_min_val
 
 """
 Example of running:
@@ -47,11 +50,23 @@ def run_experiment(experiment_type: str, first_idx: int = None, last_idx: int = 
     # Load datasets
     data_folder = './data'
     logger.info('Load datasets: %s' % data_folder)
-    dataloaders = experiment_h.get_dataloaders(data_folder)
+
+    if params['adv_attack_test']['white_box'] is False:
+        p = params['adv_attack_test']
+        # create black box attack for the testset using the model from black_box_model_path
+        model = load_pretrained_model(experiment_h.get_model(p['black_box_model_arch']), p['black_box_model_path'])
+        attack = get_attack(p['attack_type'], model, p['epsilon'], p['pgd_iter'], p['pgd_step'],
+                            (mnist_min_val, mnist_max_val))
+        dataloaders = experiment_h.get_dataloaders(data_folder, attack)
+    else:
+        # The testset is based on whitebox attack, therefore no need to create the testset in advance
+        dataloaders = experiment_h.get_dataloaders(data_folder, None)
+
+
 
     ################
     # Run basic training- so the base model will be in the same conditions as NML model
-    model_base = experiment_h.get_model()
+    model_base = experiment_h.get_model(params['initial_training']['model_arch'])
     if 'initial_training' in params and params['initial_training']['do_initial_training'] is True:
         logger.info('Execute basic training')
         params_init_training = params['initial_training']
@@ -62,18 +77,28 @@ def run_experiment(experiment_type: str, first_idx: int = None, last_idx: int = 
                                  params_init_training['gamma'],
                                  params_init_training['weight_decay'],
                                  logger.logger,
-                                 params_init_training["adv_alpha"], params_init_training["epsilon"]) # TODO: not all experiments contain adversarial parameters, fix this
-        train_class.eval_test_during_train = True
+                                 params_init_training["adv_alpha"], params_init_training["epsilon"],
+                                 params_init_training["attack_type"], params_init_training["pgd_iter"],
+                                 params_init_training["pgd_step"]) # TODO: not all experiments contain adversarial parameters, fix this
+        train_class.eval_test_during_train = False
         train_class.freeze_batch_norm = False
         acc_goal = params_init_training['acc_goal'] if 'acc_goal' in params_init_training else None
-        model_base, train_loss, test_loss = \
-            train_class.train_model(model_base, dataloaders, params_init_training['epochs'], acc_goal)
+        model_base, train_loss, test_loss = train_class.train_model(model_base, dataloaders,
+                                                                    params_init_training['epochs'], acc_goal)
         torch.save(model_base.state_dict(),
                    os.path.join(logger.output_folder, '%s_model_%f.pt' % (experiment_h.get_exp_name(), train_loss)))
     elif 'initial_training' in params and params['initial_training']['do_initial_training'] is False:
         logger.info('Load pretrained model')
-        model_base.load_state_dict(torch.load(params['initial_training']['pretrained_model_path']))
-        model_base = model_base.cuda() if torch.cuda.is_available() else model_base
+        model_base = load_pretrained_model(model_base, params['initial_training']['pretrained_model_path'])
+
+    if params['adv_attack_test']['white_box'] is True:
+        p = params['adv_attack_test']
+        attack = get_attack(p['attack_type'], model_base, p['epsilon'], p['pgd_iter'], p['pgd_step'],
+                            (mnist_min_val, mnist_max_val))
+        dataloaders = experiment_h.get_dataloaders(data_folder, attack)
+
+
+
 
     ################
     # Freeze layers
@@ -92,7 +117,9 @@ def run_experiment(experiment_type: str, first_idx: int = None, last_idx: int = 
                              params_fit_to_sample['gamma'],
                              params_fit_to_sample['weight_decay'],
                              logger.logger,
-                             params_fit_to_sample["adv_alpha"], params_fit_to_sample["epsilon"])
+                             params_init_training["adv_alpha"], params_init_training["epsilon"],
+                             params_init_training["attack_type"], params_init_training["pgd_iter"],
+                             params_init_training["pgd_step"])
     base_train_loss, base_train_acc = train_class.eval(model_base, dataloaders['train'])
     base_test_loss, base_test_acc = train_class.eval(model_base, dataloaders['test'])
     logger.info('Base model ----- [train test] loss =[%f %f] acc=[%f %f]' %
@@ -109,25 +136,26 @@ def run_experiment(experiment_type: str, first_idx: int = None, last_idx: int = 
         time_start_idx = time.time()
 
         # Extract a sample from test dataset and check output of base model
-        sample_test_data = dataloaders['test'].dataset.test_data[idx]
-        sample_test_true_label = dataloaders['test'].dataset.test_labels[idx]
-
-        # Make sure the data is HxWxC:
-        if len(sample_test_data.shape) == 3 and sample_test_data.shape[2] > sample_test_data.shape[0]:
-            sample_test_data = sample_test_data.transpose([1, 2, 0])
-
-        # Execute transformation
-        sample_test_data_for_trans = copy.deepcopy(sample_test_data)
-        if len(sample_test_data.shape) == 2:
-            sample_test_data_for_trans = sample_test_data_for_trans.unsqueeze(2).numpy()
-        sample_test_data_trans = dataloaders['test'].dataset.transform(sample_test_data_for_trans)
+        # sample_test_data = dataloaders['test'].dataset.test_data[idx]
+        # sample_test_true_label = dataloaders['test'].dataset.test_labels[idx]
+        # sample_test_data_trans = sample_test_data
+        sample_test_data_trans, sample_test_true_label = dataloaders['test'].dataset[idx]
+        # # Make sure the data is HxWxC:
+        # if len(sample_test_data.shape) == 3 and sample_test_data.shape[2] > sample_test_data.shape[0]:
+        #     sample_test_data = sample_test_data.transpose([1, 2, 0])
+        #
+        # # Execute transformation
+        # sample_test_data_for_trans = copy.deepcopy(sample_test_data)
+        # if len(sample_test_data.shape) == 2:
+        #     sample_test_data_for_trans = sample_test_data_for_trans.unsqueeze(2).numpy()
+        # sample_test_data_trans = dataloaders['test'].dataset.transform(sample_test_data_for_trans)
 
         # Evaluate with base model
         prob_org, _ = eval_single_sample(model_erm, sample_test_data_trans)
         logger.add_org_prob_to_results_dict(idx, prob_org, sample_test_true_label)
 
         # NML training- train the model with test sample
-        execute_pnml_training(params_fit_to_sample, dataloaders, sample_test_data, sample_test_true_label, idx,
+        execute_pnml_training(params_fit_to_sample, params_init_training, dataloaders, sample_test_data_trans, sample_test_true_label, idx,
                               model_base, logger, genie_only_training=False, adv_train=False)
 
         # Log and save

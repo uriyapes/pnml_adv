@@ -34,7 +34,7 @@ def fgsm(model: Module,
     loss = loss_fn(prediction, y)
     loss.backward(retain_graph=True)
 
-    x_adv = (x + torch.sign(x.grad) * eps * (1/0.3081)).clamp(*clamp).detach()
+    x_adv = (x + torch.sign(x.grad) * eps).clamp(*clamp).detach()
     x.requires_grad = False
     return x_adv
 
