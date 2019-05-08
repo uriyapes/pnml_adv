@@ -41,7 +41,7 @@ class FGSM(Attack):
         self.loss_fn = loss_fn
         self.eps_ratio = eps_ratio
         self.clamp = clamp
-        self.eps = self.eps_ratio * (1/(self.clamp[1] - self.clamp[0]))
+        self.eps = self.eps_ratio * (self.clamp[1] - self.clamp[0])
 
     def create_adversarial_sample(self,
                                   x: torch.Tensor,
@@ -77,7 +77,7 @@ class PGD(Attack):
         self.k = k
         self.norm = norm
         self.clamp = clamp
-        self.eps = self.eps_ratio * (1 / (self.clamp[1] - self.clamp[0]))
+        self.eps = self.eps_ratio * (self.clamp[1] - self.clamp[0])
 
     def create_adversarial_sample(self,
                                   x: torch.Tensor,
