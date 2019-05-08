@@ -19,7 +19,7 @@ class TrainClass:
     """
 
     def __init__(self, params_to_train, learning_rate: float, momentum: float, step_size: list, gamma: float,
-                 weight_decay: float, logger=None, adv_learn_alpha=0, adv_learn_eps=0.05, attack_type: str = 'pgd'):
+                 weight_decay: float, logger=None, adv_learn_alpha=0, adv_learn_eps=0.05, attack_type: str = 'fgsm'):
         """
         Initialize train class object.
         :param params_to_train: the parameters of pytorch Module that will be trained.
