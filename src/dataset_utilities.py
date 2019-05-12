@@ -21,6 +21,7 @@ normalize_mnist = transforms.Normalize(mean=[mean_mnist], std=[mnist_std])
 mnist_max_val = (1 - mean_mnist) / mnist_std
 mnist_min_val = (0 - mean_mnist) / mnist_std
 assert(np.isclose(1/mnist_std, mnist_max_val - mnist_min_val))
+shuffle_train_set = False
 
 
 def insert_sample_to_dataset(trainloader, sample_to_insert_data, sample_to_insert_label):
@@ -370,7 +371,7 @@ class MnistAdversarial(datasets.MNIST):
         self.adversarial_sign_dataset_path = adversarial_sign_dataset_path
         self.epsilon = epsilon
         self.test_data = self.test_data.type(torch.float32) #avoid underflow
-        grp_size = 10
+        grp_size = 128
         for index in range(int(self.test_data.shape[0]/grp_size)):
             sign = np.load(os.path.join(self.adversarial_sign_dataset_path, str(index) + '.npy'))
             # sign = np.transpose(sign, (1, 2, 0)) #This is needed in cifar10 where we have 3 dimension
@@ -438,10 +439,10 @@ class MnistAdversarialTest(datasets.MNIST):
         return x
 
 
-def create_adversarial_mnist_dataloaders(data_dir: str = './data', load_sign_dataset:bool = True,
+def create_adversarial_mnist_dataloaders(data_dir: str = './data', load_sign_dataset:bool = False,
                                          adversarial_sign_dataset_path: str =  os.path.join('data', 'mnist_adversarial_sign_batch'),
-                                            create_sign_dataset_model_path: str = "./models/mnist_adversarial_model_adv_train_1.pt",
-                                           epsilon: float = 0.5, batch_size: int = 128, num_workers: int = 4):
+                                            create_sign_dataset_model_path: str = "./models/deep_mnist_adversarial_model_lr_0.001_40ep.pt",
+                                           epsilon: float = 0.3, batch_size: int = 128, num_workers: int = 4):
     """
     create train and test pytorch dataloaders for MNIST dataset
     :param data_dir: the folder that will contain the data
@@ -455,7 +456,7 @@ def create_adversarial_mnist_dataloaders(data_dir: str = './data', load_sign_dat
     """
     print("create_adversarial_mnist_dataloaders...")
     # Normalization for MNIST dataset
-    create_adversarial_mnist_sign_dataset(data_dir, load_sign_dataset, adversarial_sign_dataset_path, create_sign_dataset_model_path)
+    create_adversarial_mnist_sign_dataset(data_dir, load_sign_dataset, adversarial_sign_dataset_path, create_sign_dataset_model_path, normalize_mnist)
 
     trainset = datasets.MNIST(root=data_dir,
                               train=True,
@@ -464,7 +465,7 @@ def create_adversarial_mnist_dataloaders(data_dir: str = './data', load_sign_dat
                                                             normalize_mnist]))
     trainloader = data.DataLoader(trainset,
                                   batch_size=batch_size,
-                                  shuffle=True,
+                                  shuffle=shuffle_train_set,
                                   num_workers=num_workers,
                                   pin_memory=True)
 
@@ -566,7 +567,7 @@ def create_mnist_train_dataloader(data_dir: str = './data', batch_size: int = 12
                                                             normalize_mnist]))
     trainloader = data.DataLoader(trainset,
                                   batch_size=batch_size,
-                                  shuffle=False,
+                                  shuffle=shuffle_train_set,
                                   num_workers=num_workers)
 
     classes = ('0', '1', '2', '3', '4', '5', '6', '7', '8', '9')

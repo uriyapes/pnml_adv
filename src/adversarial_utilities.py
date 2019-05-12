@@ -10,7 +10,7 @@ from torchvision import transforms, datasets
 
 from resnet import load_pretrained_resnet32_cifar10_model
 from resnet import resnet32
-from mpl import Net, Net_800_400_100
+from mpl import Net, Net_800_400_100, load_pretrained_model
 
 
 # Normalization for CIFAR10 dataset
@@ -69,7 +69,7 @@ def create_adversarial_sign_dataset(data_folder='./data',
     return output_folder
 
 
-def create_adversarial_mnist_sign_dataset(data_dir, load_sign_dataset, adversarial_sign_dataset_path, create_sign_dataset_model_path):
+def create_adversarial_mnist_sign_dataset(data_dir, load_sign_dataset, adversarial_sign_dataset_path, create_sign_dataset_model_path, normalize_mnist):
     if load_sign_dataset:
         assert(os.path.exists(adversarial_sign_dataset_path))
         print("Load:" + adversarial_sign_dataset_path)
@@ -77,8 +77,7 @@ def create_adversarial_mnist_sign_dataset(data_dir, load_sign_dataset, adversari
 
     # model = Net()
     model = Net_800_400_100()
-    model.load_state_dict(torch.load(create_sign_dataset_model_path))
-    normalize_mnist = transforms.Normalize(mean=[0.1307], std=[0.3081])
+    model = load_pretrained_model(model, create_sign_dataset_model_path)
 
     print("create_adversarial_mnist_sign_dataset from model:" + create_sign_dataset_model_path)
     pathlib.Path(adversarial_sign_dataset_path).mkdir(parents=True, exist_ok=True)
@@ -88,7 +87,7 @@ def create_adversarial_mnist_sign_dataset(data_dir, load_sign_dataset, adversari
                              transform=transforms.Compose([transforms.ToTensor(),
                                                            normalize_mnist]))
     testloader = data.DataLoader(testset,
-                                 batch_size=10,
+                                 batch_size=128,
                                  shuffle=False,
                                  num_workers=0)
 

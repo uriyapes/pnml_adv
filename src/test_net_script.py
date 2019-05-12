@@ -8,8 +8,8 @@ import matplotlib.pyplot as plt
 from dataset_utilities import *
 
 print(os.getcwd()) #print working dir
-def plt_adv_mnist_img():
-    trainloader, testloader, classes = create_adversarial_mnist_dataloaders(data_dir='./data', adversarial_dir='./data/mnist_adversarial_sign_batch', epsilon=0.25)
+def plt_adv_mnist_img(testloader = None):
+    # trainloader, testloader, classes = create_adversarial_mnist_dataloaders(data_dir='./data', adversarial_dir='./data/mnist_adversarial_sign_batch', epsilon=0.25)
 
     num_of_img_to_plt = 10
     for batch_idx, (inputs, labels) in enumerate(testloader):
@@ -21,7 +21,11 @@ def plt_adv_mnist_img():
             plt.show()
         break
 
-
+def plt_img(torch_images, index=0):
+    plt.figure()
+    img = (torch_images[index].cpu().detach().numpy())[0]
+    plt.imshow(img, cmap='gray')
+    plt.show()
 
 def train_model(experiment_type: str):
     ################
@@ -76,5 +80,5 @@ def train_model(experiment_type: str):
     return test_loss, test_acc, model_base
 
 
-test_loss, test_acc, model_trained = train_model('mnist_adversarial')
-print(test_acc)
+# test_loss, test_acc, model_trained = train_model('mnist_adversarial')
+# print(test_acc)

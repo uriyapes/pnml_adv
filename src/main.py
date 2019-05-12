@@ -66,10 +66,10 @@ def run_experiment(experiment_type: str, first_idx: int = None, last_idx: int = 
 
     ################
     # Run basic training- so the base model will be in the same conditions as NML model
+    params_init_training = params['initial_training']
     model_base = experiment_h.get_model(params['initial_training']['model_arch'])
     if 'initial_training' in params and params['initial_training']['do_initial_training'] is True:
         logger.info('Execute basic training')
-        params_init_training = params['initial_training']
         train_class = TrainClass(filter(lambda p: p.requires_grad, model_base.parameters()),
                                  params_init_training['lr'],
                                  params_init_training['momentum'],
