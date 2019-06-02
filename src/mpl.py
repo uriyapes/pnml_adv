@@ -62,7 +62,9 @@ class Net_800_400_100(nn.Module):
         return out
 
 
-def load_pretrained_model(model_base, model_params):
-    model_base.load_state_dict(torch.load(model_params))
-    model_base = model_base.cuda() if torch.cuda.is_available() else model_base
+def load_pretrained_model(model_base, model_params_path):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    state_dict = torch.load(model_params_path, map_location=device)
+    model_base.load_state_dict(state_dict)
+    model_base = model_base.to(device)
     return model_base

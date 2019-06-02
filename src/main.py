@@ -51,9 +51,9 @@ def run_experiment(experiment_type: str, first_idx: int = None, last_idx: int = 
     data_folder = './data'
     logger.info('Load datasets: %s' % data_folder)
 
+    # Create a black-box attack for the testset using the model from black_box_model_path
     if params['adv_attack_test']['white_box'] is False:
         p = params['adv_attack_test']
-        # create black box attack for the testset using the model from black_box_model_path
         model = load_pretrained_model(experiment_h.get_model(p['black_box_model_arch']), p['black_box_model_path'])
         attack = get_attack(p['attack_type'], model, p['epsilon'], p['pgd_iter'], p['pgd_step'],
                             (mnist_min_val, mnist_max_val))
@@ -91,6 +91,7 @@ def run_experiment(experiment_type: str, first_idx: int = None, last_idx: int = 
         logger.info('Load pretrained model')
         model_base = load_pretrained_model(model_base, params['initial_training']['pretrained_model_path'])
 
+    # Create a white-box attack and use it to create the testset
     if params['adv_attack_test']['white_box'] is True:
         p = params['adv_attack_test']
         attack = get_attack(p['attack_type'], model_base, p['epsilon'], p['pgd_iter'], p['pgd_step'],
