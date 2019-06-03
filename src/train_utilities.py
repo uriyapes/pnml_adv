@@ -20,7 +20,7 @@ class TrainClass:
 
     def __init__(self, params_to_train, learning_rate: float, momentum: float, step_size: list, gamma: float,
                  weight_decay: float, logger=None, adv_learn_alpha=0, adv_learn_eps=0.05, attack_type: str = 'pgd',
-                 pgd_iter: int = 30, pgd_step: float = 0.01):
+                 pgd_iter: int = 30, pgd_step: float = 0.01, pgd_random: bool = True):
         """
         Initialize train class object.
         :param params_to_train: the parameters of pytorch Module that will be trained.
@@ -55,6 +55,7 @@ class TrainClass:
         self.attack_type = attack_type
         self.pgd_iter = pgd_iter
         self.pgd_step = pgd_step
+        self.pgd_random = pgd_random
 
     def train_model(self, model, dataloaders, num_epochs: int = 10, acc_goal=None,
                     sample_test_data=None, sample_test_true_label=None):
@@ -67,9 +68,10 @@ class TrainClass:
         :return: trained model (also the training of the models happen inplace)
                  and the loss of the trainset and testset.
         """
+        print("Use GPU:" + str(torch.cuda.is_available()))
         model = model.cuda() if torch.cuda.is_available() else model
         attack = get_attack(self.attack_type, model, self.adv_learn_eps, self.pgd_iter, self.pgd_step,
-                            (mnist_min_val, mnist_max_val))
+                            self.pgd_random, (mnist_min_val, mnist_max_val))
 
         self.num_epochs = num_epochs
         train_loss, train_acc = torch.tensor([-1.]), torch.tensor([-1.])
@@ -236,7 +238,9 @@ def eval_single_sample(model, test_sample_data):
     # Test the sample
     model.eval()
     sample_data = test_sample_data.cuda() if torch.cuda.is_available() else test_sample_data
-    output = model(sample_data.unsqueeze(0))
+    if len(sample_data.shape) == 3:
+        sample_data = sample_data.unsqueeze(0)  # make the single sample 4-dim tensor
+    output = model(sample_data)
 
     # Prediction
     pred = output.max(1, keepdim=True)[1]
@@ -260,14 +264,14 @@ def set_bn_eval(model):
 
 
 def execute_pnml_training(train_params: dict, params_init_training: dict, dataloaders_input: dict,
-                          sample_test_data, sample_test_true_label, idx: int,
+                          sample_test_data_trans, sample_test_true_label, idx: int,
                           model_base_input, logger, genie_only_training: bool=False, adv_train: bool=False):
     """
     Execute the PNML procedure: for each label train the model and save the prediction afterword.
     :param train_params: parameters of training the model for each label
     :param train_class: the train_class is used to train and eval the model
     :param dataloaders_input: dataloaders which contains the trainset
-    :param sample_test_data: the data of the test sample that will be evaluated
+    :param sample_test_data_trans: the data of the test sample that will be evaluated
     :param sample_test_true_label: the true label of the test sample
     :param idx: the index in the testset dataset of the test sample
     :param model_base_input: the base model from which the train will start
@@ -311,7 +315,8 @@ def execute_pnml_training(train_params: dict, params_init_training: dict, datalo
             # dataloaders['train'] = trainloader_with_sample
         else:
             sample_to_insert_label_expand = torch.tensor(np.expand_dims(trained_label, 0))  # make the label to tensor array type (important for loss calculation)
-
+            if len(sample_test_data_trans.shape) == 3:
+                sample_test_data_trans = sample_test_data_trans.unsqueeze(0)# make the single sample 4-dim tensor
 
         # Execute transformation - for training and evaluating the test sample
         # sample_test_data_for_trans = copy.deepcopy(sample_test_data)
@@ -319,7 +324,8 @@ def execute_pnml_training(train_params: dict, params_init_training: dict, datalo
         #     print("mek")
         #     sample_test_data_for_trans = sample_test_data_for_trans.unsqueeze(2).numpy()
         # sample_test_data_trans = dataloaders_input['test'].dataset.transform(sample_test_data_for_trans)
-        sample_test_data_trans = sample_test_data
+
+
 
 
         # Train model

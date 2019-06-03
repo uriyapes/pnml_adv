@@ -67,22 +67,24 @@ class PGD(Attack):
                  eps_ratio: float,
                  k: int,
                  step: float,
+                 random: bool,
                  clamp: Tuple[float, float] = (0, 1),
                  norm: Union[str, int] = 'inf'):
         super(PGD, self).__init__()
         self.model = model
         self.loss_fn = loss_fn
         self.eps_ratio = eps_ratio
-        self.step = step
         self.k = k
         self.norm = norm
+        self.random = random
         self.clamp = clamp
+        self.step = step * (self.clamp[1] - self.clamp[0])
         self.eps = self.eps_ratio * (self.clamp[1] - self.clamp[0])
 
     def create_adversarial_sample(self,
                                   x: torch.Tensor,
                                   y: torch.Tensor) -> torch.Tensor:
-        return iterated_fgsm(self.model, x, y, self.loss_fn, self.k, self.step, self.eps, self.norm, random=True,
+        return iterated_fgsm(self.model, x, y, self.loss_fn, self.k, self.step, self.eps, self.norm, random=self.random,
                              clamp=self.clamp)
 
 
@@ -141,13 +143,13 @@ class Boundary(Attack):
 
 
 def get_attack(attack_type: str, model: Module = None, eps: float = 0.3, iter: int = 30, step_size: float = 0.01,
-                 clamp: Tuple[float, float] = (0, 1), loss_fn: Callable = torch.nn.CrossEntropyLoss()):
+                 random: bool = True, clamp: Tuple[float, float] = (0, 1), loss_fn: Callable = torch.nn.CrossEntropyLoss()):
     if attack_type == 'no_attack':
         attack = NoAttack()
     elif attack_type == 'fgsm':
         attack = FGSM(model, loss_fn, eps, clamp)
     elif attack_type == 'pgd':
-        attack = PGD(model, loss_fn, eps, iter, step_size, clamp)
+        attack = PGD(model, loss_fn, eps, iter, step_size, random, clamp)
     else:
         raise NameError('No attack named %s' % attack_type)
 

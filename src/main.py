@@ -17,7 +17,7 @@ from logger_utilities import Logger
 from train_utilities import TrainClass, eval_single_sample, execute_pnml_training
 from train_utilities import freeze_model_layers
 from mpl import load_pretrained_model
-from attacks import get_attack
+from adversarial.attacks import get_attack
 from dataset_utilities import mnist_max_val, mnist_min_val
 
 """
@@ -56,7 +56,7 @@ def run_experiment(experiment_type: str, first_idx: int = None, last_idx: int = 
         p = params['adv_attack_test']
         model = load_pretrained_model(experiment_h.get_model(p['black_box_model_arch']), p['black_box_model_path'])
         attack = get_attack(p['attack_type'], model, p['epsilon'], p['pgd_iter'], p['pgd_step'],
-                            (mnist_min_val, mnist_max_val))
+                            p['pgd_rand_start'], (mnist_min_val, mnist_max_val))
         dataloaders = experiment_h.get_dataloaders(data_folder, attack)
     else:
         # The testset is based on whitebox attack, therefore no need to create the testset in advance
@@ -95,7 +95,7 @@ def run_experiment(experiment_type: str, first_idx: int = None, last_idx: int = 
     if params['adv_attack_test']['white_box'] is True:
         p = params['adv_attack_test']
         attack = get_attack(p['attack_type'], model_base, p['epsilon'], p['pgd_iter'], p['pgd_step'],
-                            (mnist_min_val, mnist_max_val))
+                            p['pgd_rand_start'], (mnist_min_val, mnist_max_val))
         dataloaders = experiment_h.get_dataloaders(data_folder, attack)
 
 
