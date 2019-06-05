@@ -101,7 +101,7 @@ class TrainClass:
             # Stop training if desired goal is achieved
             if acc_goal is not None and train_acc >= acc_goal:
                 break
-        # test_loss, test_acc = self.eval(model, dataloaders['test']) # TODO: UNCOMMENT AND DELETE NEXT LINE
+        # test_loss, test_acc = self.eval(model, dataloaders['test']) # TODO: test dataloader isn't always avialble (white-box attack when model is untrained)
         test_loss, test_acc = 0, 0
 
         # Print and save

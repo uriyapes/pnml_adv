@@ -75,7 +75,9 @@ def _iterative_gradient(model: Module,
     x_adv = x.clone().detach().requires_grad_(True).to(x.device)
 
     if random:
-        x_adv = random_perturbation(x_adv, norm, eps)
+        # x_adv = random_perturbation(x_adv, norm, eps)
+        rand_gen = torch.distributions.uniform.Uniform(x_adv - eps, x_adv + eps)  #Create a point around x_adv within a range of eps
+        x_adv = rand_gen.sample().clamp(*clamp)
 
     for i in range(k):
         _x_adv = x_adv.clone().detach().requires_grad_(True)
