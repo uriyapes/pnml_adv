@@ -50,7 +50,7 @@ def _iterative_gradient(model: Module,
                         step_norm: Union[str, float],
                         y_target: torch.Tensor = None,
                         random: bool = False,
-                        clamp: Tuple[float, float] = (0, 1)) -> torch.Tensor:
+                        clamp: Tuple[float, float] = (0, 1)) -> Tuple[torch.Tensor, int]:
     """Base function for PGD and iterated FGSM
 
     Args:
@@ -71,8 +71,8 @@ def _iterative_gradient(model: Module,
     Returns:
         x_adv: Adversarially perturbed version of x
     """
-    x_adv = x.clone().detach().requires_grad_(True).to(x.device)
     targeted = y_target is not None
+    x_adv = x.clone().detach().requires_grad_(True).to(x.device)
 
     if random:
         x_adv = random_perturbation(x_adv, norm, eps)
@@ -104,8 +104,10 @@ def _iterative_gradient(model: Module,
 
         # Project back into l_norm ball and correct range
         x_adv = project(x, x_adv, norm, eps).clamp(*clamp)
+    prediction = model(x_adv)
+    adv_loss = loss_fn(prediction, y_target if targeted else y)
 
-    return x_adv.detach()
+    return x_adv.detach(), adv_loss
 
 
 def iterated_fgsm(model: Module,
@@ -118,7 +120,8 @@ def iterated_fgsm(model: Module,
                   norm: Union[str, float],
                   y_target: torch.Tensor = None,
                   random: bool = False,
-                  clamp: Tuple[float, float] = (0, 1)) -> torch.Tensor:
+                  clamp: Tuple[float, float] = (0, 1),
+                  restart_num: int = 1) -> torch.Tensor:
     """Creates an adversarial sample using the iterated Fast Gradient-Sign Method
 
     This is a white-box attack.
@@ -136,47 +139,22 @@ def iterated_fgsm(model: Module,
         y_target:
         random: Whether to start Iterated FGSM within a random point in the l_norm ball
         clamp: Max and minimum values of elements in the samples i.e. (0, 1) for MNIST
+        restart_num: the number of random restarts to attempt to locate the best adversary
 
     Returns:
         x_adv: Adversarially perturbed version of x
     """
-    return _iterative_gradient(model=model, x=x, y=y, loss_fn=loss_fn, k=k, eps=eps, norm=norm, step=step,
-                               step_norm='inf', y_target=y_target, random=random, clamp=clamp)
+    assert((random is False and restart_num == 1) or (random is True and restart_num >= 1))
+    max_loss = -1
+    best_adv = None
+    for i in range(restart_num):
+        x_adv, loss = _iterative_gradient(model=model, x=x, y=y, loss_fn=loss_fn, k=k, eps=eps, norm=norm, step=step,
+                                   step_norm='inf', y_target=y_target, random=random, clamp=clamp)
+        # print("loss in iter{}:".format(i) + str(loss))
+        if loss > max_loss:
+            best_adv = x_adv
 
-
-def pgd(model: Module,
-        x: torch.Tensor,
-        y: torch.Tensor,
-        loss_fn: Callable,
-        k: int,
-        step: float,
-        eps: float,
-        norm: Union[str, float],
-        y_target: torch.Tensor = None,
-        random: bool = False,
-        clamp: Tuple[float, float] = (0, 1)) -> torch.Tensor:
-    """Creates an adversarial sample using the Projected Gradient Descent Method
-
-    This is a white-box attack.
-
-    Args:
-        model: Model
-        x: Batch of samples
-        y: Corresponding labels
-        loss_fn: Loss function to maximise
-        k: Number of iterations to make
-        step: Size of step (i.e. L2 norm) to make at each iteration
-        eps: Maximum size of adversarial perturbation, larger perturbations will be projected back into the
-            L_norm ball
-        norm: Type of norm
-        random: Whether to start PGD within a random point in the l_norm ball
-        clamp: Max and minimum values of elements in the samples i.e. (0, 1) for MNIST
-
-    Returns:
-        x_adv: Adversarially perturbed version of x
-    """
-    return _iterative_gradient(model=model, x=x, y=y, loss_fn=loss_fn, k=k, eps=eps, norm=norm, step=step, step_norm=2,
-                               y_target=y_target, random=random, clamp=clamp)
+    return best_adv
 
 
 def boundary(model: Module,

@@ -69,7 +69,8 @@ class PGD(Attack):
                  step: float,
                  random: bool,
                  clamp: Tuple[float, float] = (0, 1),
-                 norm: Union[str, int] = 'inf'):
+                 norm: Union[str, int] = 'inf',
+                 restart_num: int = 1):
         super(PGD, self).__init__()
         self.model = model
         self.loss_fn = loss_fn
@@ -80,36 +81,13 @@ class PGD(Attack):
         self.clamp = clamp
         self.step = step * (self.clamp[1] - self.clamp[0])
         self.eps = self.eps_ratio * (self.clamp[1] - self.clamp[0])
+        self.restart_num = restart_num
 
     def create_adversarial_sample(self,
                                   x: torch.Tensor,
                                   y: torch.Tensor) -> torch.Tensor:
         return iterated_fgsm(self.model, x, y, self.loss_fn, self.k, self.step, self.eps, self.norm, random=self.random,
-                             clamp=self.clamp)
-
-
-class IteratedFGSM(Attack):
-    """Implements the Projected Gradient Descent attack"""
-    def __init__(self,
-                 model: Module,
-                 loss_fn: Callable,
-                 eps: float,
-                 k: int,
-                 step: float,
-                 norm: Union[str, int] = 'inf'):
-        super(IteratedFGSM, self).__init__()
-        self.model = model
-        self.loss_fn = loss_fn
-        self.eps = eps
-        self.step = step
-        self.k = k
-        self.norm = norm
-
-    def create_adversarial_sample(self,
-                                  x: torch.Tensor,
-                                  y: torch.Tensor,
-                                  clamp: Tuple[float, float] = (0, 1)) -> torch.Tensor:
-        return pgd(self.model, x, y, self.loss_fn, self.k, self.step, self.eps, self.norm, clamp)
+                             clamp=self.clamp, restart_num=self.restart_num)
 
 
 class Boundary(Attack):
@@ -143,13 +121,14 @@ class Boundary(Attack):
 
 
 def get_attack(attack_type: str, model: Module = None, eps: float = 0.3, iter: int = 30, step_size: float = 0.01,
-                 random: bool = True, clamp: Tuple[float, float] = (0, 1), loss_fn: Callable = torch.nn.CrossEntropyLoss()):
+                random: bool = True, clamp: Tuple[float, float] = (0, 1), restart_num: int = 1,
+                loss_fn: Callable = torch.nn.CrossEntropyLoss()):
     if attack_type == 'no_attack':
         attack = NoAttack()
     elif attack_type == 'fgsm':
         attack = FGSM(model, loss_fn, eps, clamp)
     elif attack_type == 'pgd':
-        attack = PGD(model, loss_fn, eps, iter, step_size, random, clamp)
+        attack = PGD(model, loss_fn, eps, iter, step_size, random, clamp, 'inf', restart_num)
     else:
         raise NameError('No attack named %s' % attack_type)
 

@@ -1,6 +1,6 @@
 import os
 
-from dataset_utilities import create_adversarial_mnist_dataloaders, create_mnist_train_dataloader, create_adv_mnist_test_dataloader
+from dataset_utilities import create_mnist_train_dataloader, create_adv_mnist_test_dataloader
 from dataset_utilities import create_adversarial_cifar10_dataloaders
 from dataset_utilities import create_cifar10_dataloaders
 from dataset_utilities import create_cifar10_random_label_dataloaders
@@ -118,16 +118,6 @@ class Experiment:
             if testset_black_box_attack is not None:
                 testloader, _ = create_adv_mnist_test_dataloader(testset_black_box_attack, data_folder, self.params['batch_size'], self.params['num_workers'])
                 dataloaders['test'] = testloader
-                # trainloader, testloader, classes = create_adversarial_mnist_dataloaders(data_folder,
-                #                                                                         self.params["adv_attack"]["load_sign_dataset"],
-                #                                                                         self.params["adv_attack"]["sign_dataset_path"],
-                #                                                                         self.params["adv_attack"]["create_sign_dataset_model_path"],
-                #                                                                         self.params["adv_attack"]['epsilon'],
-                #                                                                         self.params['batch_size'],
-                #                                                                         self.params['num_workers'])
-                # dataloaders = {'train': trainloader,
-                #                'test': testloader,
-                #                'classes': classes}
         else:
             raise NameError('No experiment type: %s' % self.exp_type)
 

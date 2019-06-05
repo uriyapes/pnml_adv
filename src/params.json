@@ -84,25 +84,26 @@
         }
     },
     "mnist_adversarial": {
-        "batch_size": 128,
+        "batch_size": 50,
         "num_workers": 4,
         "freeze_layer": 0,
         "adv_attack_test": {
             "_comment": "===== ADVERSARY CONFIGURATION FOR TESTING =====",
-            "attack_type": "fgsm",
-            "white_box": false,
-            "black_box_model_arch": "Net_800_400_100",
+            "attack_type": "pgd",
+            "white_box": true,
+            "black_box_model_arch": "MNISTClassifier",
             "black_box_model_path": "./models/deep_mnist_adversarial_model_lr_0.001_40ep.pt",
             "epsilon": 0.3,
             "pgd_iter": 40,
             "pgd_step": 0.01,
-            "pgd_rand_start": true
+            "pgd_rand_start": true,
+            "pgd_test_restart_num": 4
 
         },
         "initial_training": {
-            "do_initial_training": true,
-            "model_arch": "Net_800_400_100",
-            "pretrained_model_path": "./models/deep_mnist_adversarial_model_lr_0.001_40ep.pt",
+            "do_initial_training": false,
+            "model_arch": "MNISTClassifier",
+            "pretrained_model_path": "./models/mnist_classifier/pgd_sgd/mnist_adversarial_model_0.032288.pt",
             "epochs": 100,
             "lr": 0.01,
             "momentum": 0.9,
@@ -111,7 +112,7 @@
             "weight_decay": 0.0001,
             "loss_goal": 0.0,
             "_comment": "===== ADVERSARY CONFIGURATION FOR TRAINING =====",
-            "attack_type": "fgsm",
+            "attack_type": "pgd",
             "adv_alpha": 1.0,
             "epsilon": 0.3,
             "pgd_iter": 40,
@@ -119,14 +120,14 @@
             "pgd_rand_start": true
         },
         "fit_to_sample": {
-            "epochs": 10,
+            "epochs": 2,
             "lr": 0.001,
             "momentum": 0.9,
             "step_size": [5],
             "gamma": 0.1,
             "weight_decay": 0.0001,
             "test_start_idx": 0,
-            "test_end_idx": 99
+            "test_end_idx": 6
         }
     }
 }
