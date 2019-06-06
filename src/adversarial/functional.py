@@ -3,7 +3,7 @@ from functools import reduce
 from collections import deque
 from torch.nn import Module
 import torch
-
+import numpy as np
 from adversarial.utils import project, generate_misclassified_sample, random_perturbation
 
 
@@ -83,7 +83,7 @@ def _iterative_gradient(model: Module,
         _x_adv = x_adv.clone().detach().requires_grad_(True)
 
         prediction = model(_x_adv)
-        loss = loss_fn(prediction, y_target if targeted else y)
+        loss = loss_fn(prediction, y_target if targeted else y).mean()
         loss.backward(retain_graph=True)
 
         with torch.no_grad():
@@ -148,13 +148,24 @@ def iterated_fgsm(model: Module,
     """
     assert((random is False and restart_num == 1) or (random is True and restart_num >= 1))
     max_loss = -1
-    best_adv = None
+    x_adv_l = []
+    loss_l = []
+    # We want to get the element-wise loss to decide which sample has the highest loss compared to the other random
+    # start. Make sure the loss_fn that was received is cross-entropy
+    loss_fn = loss_fn(reduction='none')
     for i in range(restart_num):
         x_adv, loss = _iterative_gradient(model=model, x=x, y=y, loss_fn=loss_fn, k=k, eps=eps, norm=norm, step=step,
                                    step_norm='inf', y_target=y_target, random=random, clamp=clamp)
+        x_adv_l.append(x_adv)
+        loss_l.append(loss)
         # print("loss in iter{}:".format(i) + str(loss))
-        if loss > max_loss:
-            best_adv = x_adv
+        # if loss > max_loss:
+        #     best_adv = x_adv
+
+    x_adv_stack = torch.stack(x_adv_l)
+    loss_stack = torch.stack(loss_l)
+    max_loss_ind = torch.argmax(loss_stack, dim=0).numpy()  # find the maximum loss between all the random starts
+    best_adv = x_adv_stack[max_loss_ind, np.arange(x_adv_stack.size()[1])] #make max_loss_ind numpy
 
     return best_adv
 
