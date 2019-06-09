@@ -314,7 +314,7 @@ def execute_pnml_training(train_params: dict, params_init_training: dict, datalo
             # trainloader_with_sample = insert_sample_to_dataset(dataloaders['train'], sample_test_data, trained_label)
             # dataloaders['train'] = trainloader_with_sample
         else:
-            sample_to_insert_label_expand = torch.tensor(np.expand_dims(trained_label, 0))  # make the label to tensor array type (important for loss calculation)
+            sample_to_insert_label_expand = torch.tensor(np.expand_dims(trained_label, 0), dtype=torch.int64)  # make the label to tensor array type (important for loss calculation)
             if len(sample_test_data_trans.shape) == 3:
                 sample_test_data_trans = sample_test_data_trans.unsqueeze(0)# make the single sample 4-dim tensor
 

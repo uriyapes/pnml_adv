@@ -72,26 +72,32 @@ def _iterative_gradient(model: Module,
         x_adv: Adversarially perturbed version of x
     """
     targeted = y_target is not None
-    x_adv = x.clone().detach().requires_grad_(True).to(x.device)
-
+    # x_adv = x.clone().detach().requires_grad_(True).to(x.device)
+    x_adv = x.clone().to(x.device)
     if random:
         # x_adv = random_perturbation(x_adv, norm, eps)
         rand_gen = torch.distributions.uniform.Uniform(x_adv - eps, x_adv + eps)  #Create a point around x_adv within a range of eps
         x_adv = rand_gen.sample().clamp(*clamp)
 
     for i in range(k):
-        _x_adv = x_adv.clone().detach().requires_grad_(True)
-
-        prediction = model(_x_adv)
+        # Each new loop x_adv is a new variable (x_adv += gradients), therefore we must detach it (otherwise backward()
+        # will result in calculating the old clones gradients as well) and then requires_grad_(True) since detach()
+        # disabled the grad.
+        # The other option (original) is to work with temp variable _x_adv (see below) but it seems to prelong the
+        # calculation time maybe as a result of re-cloning
+        # _x_adv = x_adv.clone().detach().requires_grad_(True)
+        x_adv = x_adv.detach()
+        x_adv.requires_grad_(True)
+        prediction = model(x_adv)
         loss = loss_fn(prediction, y_target if targeted else y).mean()
         loss.backward(retain_graph=True)
 
         with torch.no_grad():
             if step_norm == 'inf':
-                gradients = _x_adv.grad.sign() * step
+                gradients = x_adv.grad.sign() * step
             else:
                 # .view() assumes batched image data as 4D tensor
-                gradients = _x_adv.grad * step / _x_adv.grad.view(_x_adv.shape[0], -1).norm(step_norm, dim=-1)\
+                gradients = x_adv.grad * step / x_adv.grad.view(x_adv.shape[0], -1).norm(step_norm, dim=-1)\
                     .view(-1, 1, 1, 1)
 
             if targeted:
@@ -162,10 +168,13 @@ def iterated_fgsm(model: Module,
         # if loss > max_loss:
         #     best_adv = x_adv
 
-    x_adv_stack = torch.stack(x_adv_l)
-    loss_stack = torch.stack(loss_l)
-    max_loss_ind = torch.argmax(loss_stack, dim=0).numpy()  # find the maximum loss between all the random starts
-    best_adv = x_adv_stack[max_loss_ind, np.arange(x_adv_stack.size()[1])] #make max_loss_ind numpy
+    if restart_num == 1:
+        return x_adv_l[0]
+    else:
+        x_adv_stack = torch.stack(x_adv_l)
+        loss_stack = torch.stack(loss_l)
+        max_loss_ind = torch.argmax(loss_stack, dim=0).tolist()  # find the maximum loss between all the random starts
+        best_adv = x_adv_stack[max_loss_ind, range(x_adv_stack.size()[1])] #make max_loss_ind numpy
 
     return best_adv
 
