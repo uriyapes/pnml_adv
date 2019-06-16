@@ -85,6 +85,7 @@ class TrainClass:
             total_loss_in_epoch, train_loss, train_acc = self.__train(model, dataloaders['train'], attack,
                                                                       sample_test_data, sample_test_true_label)
             if self.eval_test_during_train is True:
+                assert(dataloaders.__contains__('test'))
                 test_loss, test_acc = self.eval(model, dataloaders['test'])
             else:
                 test_loss, test_acc = torch.tensor([-1.]), torch.tensor([-1.])
@@ -101,16 +102,20 @@ class TrainClass:
             # Stop training if desired goal is achieved
             if acc_goal is not None and train_acc >= acc_goal:
                 break
-        # test_loss, test_acc = self.eval(model, dataloaders['test']) # TODO: test dataloader isn't always avialble (white-box attack when model is untrained)
-        test_loss, test_acc = 0, 0
 
+        if dataloaders.__contains__('test'):
+            test_loss, test_acc = self.eval(model, dataloaders['test'])
+
+        else:
+            test_loss, test_acc = torch.tensor([-1.]), torch.tensor([-1.])
+
+        train_loss_output = float(train_loss.cpu().detach().numpy().round(16))
+        test_loss_output = float(test_loss.cpu().detach().numpy().round(16))
         # Print and save
         self.logger.info('----- [train test] loss =[%f %f], adv_loss=[%f], acc=[%f %f] epoch_time=%.2f' %
                          (train_loss, test_loss, total_loss_in_epoch, train_acc, test_acc,
                           epoch_time))
-        train_loss_output = float(train_loss.cpu().detach().numpy().round(16))
-        # test_loss_output = float(test_loss.cpu().detach().numpy().round(16))
-        test_loss_output = 0
+
         return model, train_loss_output, test_loss_output
 
     def __train(self, model, train_loader, attack, sample_test_data=None, sample_test_true_label=None):
