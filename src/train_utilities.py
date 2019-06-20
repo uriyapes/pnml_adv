@@ -17,7 +17,7 @@ class TrainClass:
     """
     Class which execute train on a DNN model.
     """
-
+    criterion = nn.CrossEntropyLoss()
     def __init__(self, params_to_train, learning_rate: float, momentum: float, step_size: list, gamma: float,
                  weight_decay: float, logger=None, adv_learn_alpha=0, adv_learn_eps=0.05, attack_type: str = 'pgd',
                  pgd_iter: int = 30, pgd_step: float = 0.01, pgd_random: bool = True):
@@ -45,7 +45,7 @@ class TrainClass:
                                    lr=learning_rate,
                                    momentum=momentum,
                                    weight_decay=weight_decay)
-        self.criterion = nn.CrossEntropyLoss()
+
         self.scheduler = optim.lr_scheduler.MultiStepLR(self.optimizer,
                                                         milestones=step_size,
                                                         gamma=gamma)
@@ -103,9 +103,8 @@ class TrainClass:
             if acc_goal is not None and train_acc >= acc_goal:
                 break
 
-        if dataloaders.__contains__('test'):
+        if 'test' in dataloaders:
             test_loss, test_acc = self.eval(model, dataloaders['test'])
-
         else:
             test_loss, test_acc = torch.tensor([-1.]), torch.tensor([-1.])
 
@@ -176,7 +175,7 @@ class TrainClass:
                                                                                sample_test_true_label)
                     _, predicted = torch.max(output_sample_test.data, 1)
                     # correct += (predicted == sample_test_true_label).sum().item() #TODO: when calculating accuracy (after epoch) we need to divide by +1
-                    if self.criterion.reduction == 'elementwise_mean':  # Re-average the loss since another image was added
+                    if TrainClass.criterion.reduction == 'elementwise_mean':  # Re-average the loss since another image was added
                         loss_sample_test = loss_sample_test / (len(images) + 1)
                         # loss = loss * len(images) / (len(images) + 1) TODO: uncomment
                     loss_sample_test.backward(retain_graph=True)
@@ -186,7 +185,7 @@ class TrainClass:
 
                 _, adv_loss = self.__forward_pass(model, adv_images, labels)
                 # outputs = model(adv_images)
-                # adv_loss = self.criterion(outputs, labels)  # Negative log-loss
+                # adv_loss = TrainClass.criterion(outputs, labels)  # Negative log-loss
                 total_loss = (1 - self.adv_learn_alpha) * loss + self.adv_learn_alpha * adv_loss #+ loss_sample_test
                 total_loss_in_epoch += total_loss * len(images)
                 total_loss.backward()
@@ -199,12 +198,14 @@ class TrainClass:
         train_acc = correct / len(train_loader.dataset)
         return total_loss_in_epoch, train_loss, train_acc
 
-    def __forward_pass(self, model, images, labels):
+    @classmethod
+    def __forward_pass(cls, model, images, labels):
         outputs = model(images)
-        loss = self.criterion(outputs, labels)  # Negative log-loss
+        loss = cls.criterion(outputs, labels)  # Negative log-loss
         return outputs, loss
 
-    def eval(self, model, dataloader):
+    @classmethod
+    def eval(cls, model, dataloader):
         """
         Evaluate the performance of the model on the train/test sets.
         :param model: the model that will be evaluated.
@@ -219,9 +220,7 @@ class TrainClass:
                 data = data.cuda() if torch.cuda.is_available() else data
                 labels = labels.cuda() if torch.cuda.is_available() else labels
 
-                outputs, batch_loss = self.__forward_pass(model, data, labels)
-                # outputs = model(data)
-                # loss = self.criterion(outputs, labels)
+                outputs, batch_loss = cls.__forward_pass(model, data, labels)
                 loss += batch_loss * len(data)  # loss sum for all the batch
                 _, predicted = torch.max(outputs.data, 1)
                 correct += (predicted == labels).sum().item()
@@ -242,7 +241,12 @@ def eval_single_sample(model, test_sample_data):
 
     # Test the sample
     model.eval()
-    sample_data = test_sample_data.cuda() if torch.cuda.is_available() else test_sample_data
+
+    if next(model.parameters()).is_cuda:  # This only checks the first iteration from parameters(), a better way is to loop over all parameters
+        sample_data = test_sample_data.cuda()
+    else:
+        sample_data = test_sample_data.cpu()
+    # sample_data = test_sample_data.cuda() if torch.cuda.is_available() else test_sample_data
     if len(sample_data.shape) == 3:
         sample_data = sample_data.unsqueeze(0)  # make the single sample 4-dim tensor
     output = model(sample_data)
@@ -368,6 +372,76 @@ def execute_pnml_training(train_params: dict, params_init_training: dict, datalo
                np.argmax(prob),
                train_loss, test_loss,
                time_trained_label))
+
+
+def execute_pnml_adv_fix(pnml_params: dict, params_init_training: dict, dataloaders_input: dict,
+                          sample_test_data_trans, sample_test_true_label, idx: int,
+                          model_base_input, logger, genie_only_training: bool=False):
+    """
+    Execute the PNML procedure: for each label train the model and save the prediction afterword.
+    :param pnml_params: parameters of training the model for each label
+    :param train_class: the train_class is used to train and eval the model
+    :param dataloaders_input: dataloaders which contains the trainset
+    :param sample_test_data_trans: the data of the test sample that will be evaluated
+    :param sample_test_true_label: the true label of the test sample
+    :param idx: the index in the testset dataset of the test sample
+    :param model_base_input: the base model from which the train will start
+    :param logger: logger class to print logs and save results to file
+    :param genie_only_training: calculate only genie probability for speed up when debugging
+    :return: None
+    """
+
+    # Check pnml_params contains all required keys
+    required_keys = ['lr', 'momentum', 'step_size', 'gamma', 'weight_decay', 'epochs']
+    for key in required_keys:
+        if key not in pnml_params:
+            logger.logger.error('The key: %s is not in pnml_params' % key)
+            raise ValueError('The key: %s is not in pnml_params' % key)
+
+    classes_trained = dataloaders_input['classes']
+    if 'classes_cifar100' in dataloaders_input:
+        classes_true = dataloaders_input['classes_cifar100']
+    elif 'classes_svhn' in dataloaders_input:
+        classes_true = dataloaders_input['classes_svhn']
+    elif 'classes_noise' in dataloaders_input:
+        classes_true = dataloaders_input['classes_noise']
+    else:
+        classes_true = classes_trained
+
+    # Iteration of all labels
+    if genie_only_training:
+        trained_label_list = [sample_test_true_label.tolist()]
+    else:
+        trained_label_list = range(len(classes_trained))
+    model = deepcopy(model_base_input.to("cpu"))  # working on a single sample, it is reasonable to assume cpu is better
+    refinement = get_attack(pnml_params['fix_type'], model, pnml_params['epsilon'], pnml_params['pgd_iter'],
+                           pnml_params['pgd_step'], pnml_params['pgd_rand_start'], (mnist_min_val, mnist_max_val),
+                           pnml_params['pgd_test_restart_num'])
+    for fix_to_label in trained_label_list:
+        time_trained_label_start = time.time()
+
+        fix_label_expand = torch.tensor(np.expand_dims(fix_to_label, 0), dtype=torch.int64)
+        true_label_expand = torch.tensor(np.expand_dims(sample_test_true_label, 0), dtype=torch.int64)  # make the label to tensor array type (important for loss calculation)
+        if len(sample_test_data_trans.shape) == 3:
+            sample_test_data_trans = sample_test_data_trans.unsqueeze(0)# make the single sample 4-dim tensor
+
+        time_trained_label = time.time() - time_trained_label_start
+
+
+        # Evaluate with base model
+        x_refine = refinement.create_adversarial_sample(sample_test_data_trans, true_label_expand, fix_label_expand)
+        prob, pred = eval_single_sample(model, x_refine)
+        # from test_net_script import plt_img
+        # plt_img(x_refine, 0)
+        # Save to file
+        logger.add_entry_to_results_dict(idx, str(fix_to_label), prob, -1, -1)
+        logger.info(
+            'idx=%d fix_to_label=[%d,%s], true_label=[%d,%s] predict=[%d], time=%4.2f[s]'
+            % (idx, fix_to_label, classes_trained[fix_to_label],
+               sample_test_true_label, classes_true[sample_test_true_label],
+               np.argmax(prob),
+               time_trained_label))
+
 
 
 def freeze_model_layers(model, max_freeze_layer: int, logger):

@@ -14,7 +14,7 @@ np.random.seed(0)
 
 from experimnet_utilities import Experiment
 from logger_utilities import Logger
-from train_utilities import TrainClass, eval_single_sample, execute_pnml_training
+from train_utilities import TrainClass, eval_single_sample, execute_pnml_training, execute_pnml_adv_fix
 from train_utilities import freeze_model_layers
 from mpl import load_pretrained_model
 from adversarial.attacks import get_attack
@@ -124,7 +124,8 @@ def run_experiment(experiment_type: str, first_idx: int = None, last_idx: int = 
                 (base_train_loss, base_test_loss, base_train_acc, base_test_acc))
 
     train_class.eval_test_during_train = True
-    model_erm, train_loss, test_loss = train_class.train_model(model_erm, dataloaders,
+    if params_fit_to_sample['pnml_train_or_fix'] is "train":
+        model_erm, train_loss, test_loss = train_class.train_model(model_erm, dataloaders,
                                                                params_fit_to_sample['epochs'])
     ############################
     # Iterate over test dataset
@@ -152,9 +153,14 @@ def run_experiment(experiment_type: str, first_idx: int = None, last_idx: int = 
         prob_org, _ = eval_single_sample(model_erm, sample_test_data_trans)
         logger.add_org_prob_to_results_dict(idx, prob_org, sample_test_true_label)
 
-        # NML training- train the model with test sample
-        execute_pnml_training(params_fit_to_sample, params_init_training, dataloaders, sample_test_data_trans, sample_test_true_label, idx,
-                              model_base, logger, genie_only_training=False, adv_train=False)
+        if params_fit_to_sample["pnml_train_or_fix"] == "train":
+            # NML training- train the model with test sample
+            execute_pnml_training(params_fit_to_sample, params_init_training, dataloaders, sample_test_data_trans, sample_test_true_label, idx,
+                                  model_base, logger, genie_only_training=False, adv_train=False)
+        elif params_fit_to_sample["pnml_train_or_fix"] == "fix":
+            execute_pnml_adv_fix(params_fit_to_sample, params_init_training, dataloaders, sample_test_data_trans,
+                                  sample_test_true_label, idx,
+                                  model_base, logger, genie_only_training=False)
 
         # Log and save
         logger.save_json_file()

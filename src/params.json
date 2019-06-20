@@ -89,18 +89,19 @@
         "freeze_layer": 0,
         "adv_attack_test": {
             "_comment": "===== ADVERSARY TESTING =====",
-            "attack_type": "pgd",
             "white_box": true,
             "black_box_model_arch": "MNISTClassifier",
             "black_box_model_path": "./models/deep_mnist_adversarial_model_lr_0.001_40ep.pt",
+            "attack_type": "pgd",
             "epsilon": 0.3,
             "pgd_iter": 40,
             "pgd_step": 0.01,
             "pgd_rand_start": true,
-            "pgd_test_restart_num": 20
+            "pgd_test_restart_num": 40
 
         },
         "initial_training": {
+            "_comment": "===== ADVERSARY TRAINING =====",
             "do_initial_training": false,
             "model_arch": "MNISTClassifier",
             "pretrained_model_path": "./models/mnist_classifier/pgd_ep100_eps0.3_restart20_uniformRnd/mnist_adversarial_model_0.048931.pt",
@@ -111,23 +112,29 @@
             "gamma": 0.1,
             "weight_decay": 0.0001,
             "loss_goal": 0.0,
-            "_comment": "===== ADVERSARY TRAINING =====",
-            "attack_type": "pgd",
             "adv_alpha": 1.0,
-            "epsilon": 0.3,
+            "attack_type": "pgd",
+            "epsilon": 0.3 ,
             "pgd_iter": 40,
             "pgd_step": 0.01,
             "pgd_rand_start": true
         },
         "fit_to_sample": {
-            "epochs": 2,
+            "pnml_train_or_fix": "fix",
+            "epochs": 10,
             "lr": 0.001,
             "momentum": 0.9,
             "step_size": [5],
             "gamma": 0.1,
             "weight_decay": 0.0001,
             "test_start_idx": 0,
-            "test_end_idx": 6
+            "test_end_idx": 200,
+            "fix_type": "pgd",
+            "epsilon": 0.023,
+            "pgd_iter": 30,
+            "pgd_step": 0.002,
+            "pgd_rand_start": true,
+            "pgd_test_restart_num": 10
         }
     }
 }

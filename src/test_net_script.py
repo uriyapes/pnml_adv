@@ -22,8 +22,13 @@ def plt_adv_mnist_img(testloader = None):
         break
 
 def plt_img(torch_images, index=0):
+    """ plt_img prints grayscale images"""
     plt.figure()
-    img = (torch_images[index].cpu().detach().numpy())[0]
+    if torch_images.dim() == 4:
+        # remove redundant dimension (channel)
+        img = (torch_images[index].cpu().detach().numpy())[0]
+    else:
+        img = (torch_images[index].cpu().detach().numpy())
     plt.imshow(img, cmap='gray')
     plt.show()
 

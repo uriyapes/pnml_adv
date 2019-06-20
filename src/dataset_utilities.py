@@ -396,24 +396,28 @@ class MnistAdversarialTest(datasets.MNIST):
         """
         super(MnistAdversarialTest, self).__init__(**kwargs)
         assert(self.train is False)
-        grp_size = 10
-        test_adv_data = torch.zeros([len(self.test_data), 1, 28, 28])
-        for index in range(int(self.test_data.shape[0])):
+        grp_size = 100
+        test_samples = int(self.test_data.shape[0] / 30)# TODO: remove division by 30
+        test_adv_data = torch.zeros([test_samples, 1, 28, 28])
+        from test_net_script import plt_img
+        plt_img(self.test_data, 0)
+        for index in range(test_samples):
             # use the transform on all the testset
             img = Image.fromarray(self.test_data[index].numpy(), mode='L')
             test_adv_data[index] = transform(img)
 
         self.test_data = test_adv_data
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        for index in range(int(self.test_data.shape[0] / grp_size)):
+        for index in range(int(test_samples / grp_size)):
+            print(index)
             # save the adversarial testset
-
             self.test_data[index*grp_size:(index+1)*grp_size] = attack.create_adversarial_sample(
                                                 self.test_data[index*grp_size:(index+1)*grp_size].to(device),
                                                 self.test_labels[index*grp_size:(index+1)*grp_size].to(device))
 
         self.test_data = self.test_data.to("cpu")
         self.transform = self.null_transform
+        plt_img(self.test_data, 0)
 
     def __getitem__(self, index):
         """
@@ -439,53 +443,53 @@ class MnistAdversarialTest(datasets.MNIST):
         return x
 
 
-def create_adversarial_mnist_dataloaders(data_dir: str = './data', load_sign_dataset:bool = False,
-                                         adversarial_sign_dataset_path: str =  os.path.join('data', 'mnist_adversarial_sign_batch'),
-                                            create_sign_dataset_model_path: str = "./models/deep_mnist_adversarial_model_lr_0.001_40ep.pt",
-                                           epsilon: float = 0.3, batch_size: int = 128, num_workers: int = 4):
-    """
-    create train and test pytorch dataloaders for MNIST dataset
-    :param data_dir: the folder that will contain the data
-    :param load_sign_dataset: whether to load or to calculate adversarial sign dataset
-    :param adversarial_sign_dataset_path: the output dir to which the gradient adversarial sign will be saved.
-    :param create_sign_dataset_model_path: If load_sign_dataset is false use this path to model to create new adversarial sign dataset.
-    :param epsilon: the additive gradient strength to be added to the image.
-    :param batch_size: the size of the batch for test and train loaders
-    :param num_workers: number of cpu workers which loads the GPU with the dataset
-    :return: train and test loaders along with mapping between labels and class names
-    """
-    print("create_adversarial_mnist_dataloaders...")
-    # Normalization for MNIST dataset
-    create_adversarial_mnist_sign_dataset(data_dir, load_sign_dataset, adversarial_sign_dataset_path, create_sign_dataset_model_path, normalize_mnist)
-
-    trainset = datasets.MNIST(root=data_dir,
-                              train=True,
-                              download=True,
-                              transform=transforms.Compose([transforms.ToTensor(),
-                                                            normalize_mnist]))
-    trainloader = data.DataLoader(trainset,
-                                  batch_size=batch_size,
-                                  shuffle=shuffle_train_set,
-                                  num_workers=num_workers,
-                                  pin_memory=True)
-
-    testset = MnistAdversarial(root=data_dir,
-                                 train=False,
-                                 download=True,
-                                 transform=transforms.Compose([transforms.ToTensor(),
-                                                               normalize_mnist]),
-                                 adversarial_sign_dataset_path=adversarial_sign_dataset_path,
-                                 epsilon=epsilon)
-
-    testloader = data.DataLoader(testset,
-                                 batch_size=batch_size,
-                                 shuffle=False,
-                                 num_workers=num_workers,
-                                 pin_memory=True)
-
-    classes = ('0', '1', '2', '3', '4', '5', '6', '7', '8', '9')
-
-    return trainloader, testloader, classes
+# def create_adversarial_mnist_dataloaders(data_dir: str = './data', load_sign_dataset:bool = False,
+#                                          adversarial_sign_dataset_path: str =  os.path.join('data', 'mnist_adversarial_sign_batch'),
+#                                             create_sign_dataset_model_path: str = "./models/deep_mnist_adversarial_model_lr_0.001_40ep.pt",
+#                                            epsilon: float = 0.3, batch_size: int = 128, num_workers: int = 4):
+#     """
+#     create train and test pytorch dataloaders for MNIST dataset
+#     :param data_dir: the folder that will contain the data
+#     :param load_sign_dataset: whether to load or to calculate adversarial sign dataset
+#     :param adversarial_sign_dataset_path: the output dir to which the gradient adversarial sign will be saved.
+#     :param create_sign_dataset_model_path: If load_sign_dataset is false use this path to model to create new adversarial sign dataset.
+#     :param epsilon: the additive gradient strength to be added to the image.
+#     :param batch_size: the size of the batch for test and train loaders
+#     :param num_workers: number of cpu workers which loads the GPU with the dataset
+#     :return: train and test loaders along with mapping between labels and class names
+#     """
+#     print("create_adversarial_mnist_dataloaders...")
+#     # Normalization for MNIST dataset
+#     create_adversarial_mnist_sign_dataset(data_dir, load_sign_dataset, adversarial_sign_dataset_path, create_sign_dataset_model_path, normalize_mnist)
+#
+#     trainset = datasets.MNIST(root=data_dir,
+#                               train=True,
+#                               download=True,
+#                               transform=transforms.Compose([transforms.ToTensor(),
+#                                                             normalize_mnist]))
+#     trainloader = data.DataLoader(trainset,
+#                                   batch_size=batch_size,
+#                                   shuffle=shuffle_train_set,
+#                                   num_workers=num_workers,
+#                                   pin_memory=True)
+#
+#     testset = MnistAdversarial(root=data_dir,
+#                                  train=False,
+#                                  download=True,
+#                                  transform=transforms.Compose([transforms.ToTensor(),
+#                                                                normalize_mnist]),
+#                                  adversarial_sign_dataset_path=adversarial_sign_dataset_path,
+#                                  epsilon=epsilon)
+#
+#     testloader = data.DataLoader(testset,
+#                                  batch_size=batch_size,
+#                                  shuffle=False,
+#                                  num_workers=num_workers,
+#                                  pin_memory=True)
+#
+#     classes = ('0', '1', '2', '3', '4', '5', '6', '7', '8', '9')
+#
+#     return trainloader, testloader, classes
 
 
 def create_adv_mnist_test_dataloader(attack, data_dir: str = './data', batch_size: int = 128, num_workers: int = 4):

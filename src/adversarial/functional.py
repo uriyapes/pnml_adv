@@ -101,8 +101,8 @@ def _iterative_gradient(model: Module,
                     .view(-1, 1, 1, 1)
 
             if targeted:
-                # Targeted: Gradient descent with on the loss of the (incorrect) target label
-                # w.r.t. the model parameters
+                # Targeted: Gradient descent on the loss of the (incorrect) target label
+                # w.r.t. the model parameters (increasing prob. to predict the incorrect label)
                 x_adv -= gradients
             else:
                 # Untargeted: Gradient ascent on the loss of the correct label w.r.t.
@@ -112,10 +112,11 @@ def _iterative_gradient(model: Module,
 
         # Project back into l_norm ball and correct range
         x_adv = project(x, x_adv, norm, eps).clamp(*clamp)
+    x_adv = x_adv.detach()
     prediction = model(x_adv)
     adv_loss = loss_fn(prediction, y_target if targeted else y)
 
-    return x_adv.detach(), adv_loss
+    return x_adv, adv_loss
 
 
 def iterated_fgsm(model: Module,
@@ -173,8 +174,11 @@ def iterated_fgsm(model: Module,
     else:
         x_adv_stack = torch.stack(x_adv_l)
         loss_stack = torch.stack(loss_l)
-        max_loss_ind = torch.argmax(loss_stack, dim=0).tolist()  # find the maximum loss between all the random starts
-        best_adv = x_adv_stack[max_loss_ind, range(x_adv_stack.size()[1])] #make max_loss_ind numpy
+        if y_target is None:
+            best_loss_ind = torch.argmax(loss_stack, dim=0).tolist()  # find the maximum loss between all the random starts
+        else:
+            best_loss_ind = torch.argmin(loss_stack, dim=0).tolist()  # find the minimum loss for the specified y_target
+        best_adv = x_adv_stack[best_loss_ind, range(x_adv_stack.size()[1])]  # make max_loss_ind numpy
 
     return best_adv
 

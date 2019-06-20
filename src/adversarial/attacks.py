@@ -85,9 +85,10 @@ class PGD(Attack):
 
     def create_adversarial_sample(self,
                                   x: torch.Tensor,
-                                  y: torch.Tensor) -> torch.Tensor:
-        return iterated_fgsm(self.model, x, y, self.loss_fn, self.k, self.step, self.eps, self.norm, random=self.random,
-                             clamp=self.clamp, restart_num=self.restart_num)
+                                  y: torch.Tensor,
+                                  y_target: torch.Tensor = None) -> torch.Tensor:
+        return iterated_fgsm(self.model, x, y, self.loss_fn, self.k, self.step, self.eps, self.norm, y_target=y_target,
+                             random=self.random, clamp=self.clamp, restart_num=self.restart_num)
 
 
 class Boundary(Attack):
