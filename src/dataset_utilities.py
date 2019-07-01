@@ -21,7 +21,7 @@ normalize_mnist = transforms.Normalize(mean=[mean_mnist], std=[mnist_std])
 mnist_max_val = (1 - mean_mnist) / mnist_std
 mnist_min_val = (0 - mean_mnist) / mnist_std
 assert(np.isclose(1/mnist_std, mnist_max_val - mnist_min_val))
-shuffle_train_set = False
+shuffle_train_set = True
 
 
 def insert_sample_to_dataset(trainloader, sample_to_insert_data, sample_to_insert_label):

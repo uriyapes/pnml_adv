@@ -27,7 +27,7 @@ class TrainClass:
         :param learning_rate: initial learning rate for the optimizer.
         :param momentum:  initial momentum rate for the optimizer.
         :param step_size: reducing the learning rate by gamma each step_size.
-        :param gamma:  reducing the learning rate by gamma each step_size.
+        :param gamma:  reducing the learning rate by multiplicative of gamma each step_size.
         :param weight_decay: L2 regularization.
         :param logger: logger class in order to print logs and save results.
         :param adv_learn_alpha: The weight that should be given to the adversarial learning regulaizer (0 means none).
@@ -373,7 +373,7 @@ def execute_pnml_training(train_params: dict, params_init_training: dict, datalo
                train_loss, test_loss,
                time_trained_label))
 
-
+execute_pnml_adv_fix_ind = 0
 def execute_pnml_adv_fix(pnml_params: dict, params_init_training: dict, dataloaders_input: dict,
                           sample_test_data_trans, sample_test_true_label, idx: int,
                           model_base_input, logger, genie_only_training: bool=False):
@@ -431,8 +431,13 @@ def execute_pnml_adv_fix(pnml_params: dict, params_init_training: dict, dataload
         # Evaluate with base model
         x_refine = refinement.create_adversarial_sample(sample_test_data_trans, true_label_expand, fix_label_expand)
         prob, pred = eval_single_sample(model, x_refine)
-        # from test_net_script import plt_img
-        # plt_img(x_refine, 0)
+
+        global execute_pnml_adv_fix_ind
+        if execute_pnml_adv_fix_ind == 0:
+            from test_net_script import plt_img
+            plt_img(x_refine, 0)
+
+
         # Save to file
         logger.add_entry_to_results_dict(idx, str(fix_to_label), prob, -1, -1)
         logger.info(
@@ -441,6 +446,7 @@ def execute_pnml_adv_fix(pnml_params: dict, params_init_training: dict, dataload
                sample_test_true_label, classes_true[sample_test_true_label],
                np.argmax(prob),
                time_trained_label))
+    execute_pnml_adv_fix_ind = execute_pnml_adv_fix_ind + 1
 
 
 
