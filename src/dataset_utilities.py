@@ -101,33 +101,64 @@ def create_svhn_dataloaders(data_dir: str = './data', batch_size: int = 128, num
     return trainloader, testloader, classes_svhn, classes_cifar10
 
 
-def create_cifar10_dataloaders(data_dir: str = './data', batch_size: int = 128, num_workers: int = 4):
+class transfrom_per_img_norm(object):
+    def __init__(self):
+        pass
+
+    def __call__(self, img):
+        num_channels = img.shape[0]
+        assert(num_channels == 3)
+        per_ch_mean = torch.zeros(num_channels)
+        img_np = img.numpy()
+        for i in range(num_channels):
+            img_np[i,:,:] = (img_np[i,:,:] - np.mean(img_np[i,:,:])) / (np.std(img_np[i,:,:]) + np.finfo(float).eps)
+
+        return torch.from_numpy(img_np)
+
+def create_cifar10_dataloaders(data_dir: str = './data', batch_size: int = 128, num_workers: int = 4, train_augmentation: bool = True):
     """
     create train and test pytorch dataloaders for CIFAR10 dataset
     :param data_dir: the folder that will contain the data
     :param batch_size: the size of the batch for test and train loaders
     :param num_workers: number of cpu workers which loads the GPU with the dataset
+    :param train_augmentation: use padding with cropping and random flipping to create data augmentation.
     :return: train and test loaders along with mapping between labels and class names
     """
+    if train_augmentation:
+        # Same transformation as in https://github.com/MadryLab/cifar10_challenge/blob/master/cifar10_input.py (Line 95)
+        # No mean-std normalization were used.
+        cifar_transform_train = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Lambda(lambda x: torch.nn.functional.pad(x.unsqueeze(0),
+                              (4, 4, 4, 4), mode='constant', value=0).squeeze()),
+            transforms.ToPILImage(),
+            transforms.RandomCrop(32),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(), transfrom_per_img_norm()# TODO: check per image normalization works good
+        ])
+        cifar_transform_test = transforms.Compose([transforms.ToTensor(), transfrom_per_img_norm()])
+    else:
+        cifar_transform_train = transforms.Compose([transforms.ToTensor(), normalize])
+        cifar_transform_test = transforms.Compose([transforms.ToTensor(), normalize])
     trainset = datasets.CIFAR10(root=data_dir,
                                 train=True,
                                 download=True,
-                                transform=transforms.Compose([transforms.ToTensor(),
-                                                              normalize]))
+                                transform=cifar_transform_train)
     trainloader = data.DataLoader(trainset,
                                   batch_size=batch_size,
-                                  shuffle=False,
-                                  num_workers=num_workers)
+                                  shuffle=shuffle_train_set,
+                                  num_workers=num_workers,
+                                  pin_memory=True)
 
     testset = datasets.CIFAR10(root=data_dir,
                                train=False,
                                download=True,
-                               transform=transforms.Compose([transforms.ToTensor(),
-                                                             normalize]))
+                               transform=cifar_transform_test)
     testloader = data.DataLoader(testset,
                                  batch_size=batch_size,
                                  shuffle=False,
-                                 num_workers=num_workers)
+                                 num_workers=num_workers,
+                                 pin_memory=True)
     classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
     return trainloader, testloader, classes

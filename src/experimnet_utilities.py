@@ -9,8 +9,9 @@ from dataset_utilities import create_svhn_dataloaders
 from dataset_utilities import dataloaders_noise
 from adversarial_utilities import create_adversarial_mnist_sign_dataset
 from mpl import Net, Net_800_400_100, MNISTClassifier, load_pretrained_model
-from resnet import resnet20, load_pretrained_resnet20_cifar10_model
-from wide_resnet import WideResNet
+from resnet import resnet20, resnet56, resnet110, load_pretrained_resnet20_cifar10_model
+from wide_resnet_original import WideResNet
+from models.wide_resnet import WideResNet as MadryWideResNet
 
 
 class Experiment:
@@ -20,7 +21,7 @@ class Experiment:
                             'out_of_dist_svhn',
                             'out_of_dist_noise',
                             'pnml_mnist',
-                            'adversarial',
+                            'cifar_adversarial',
                             'mnist_adversarial']:
             raise NameError('No experiment type: %s' % type)
         self.params = params
@@ -40,8 +41,8 @@ class Experiment:
             self.params = self.params['pnml_cifar10']
         elif self.exp_type == 'pnml_mnist':
             self.params = self.params['pnml_mnist']
-        elif self.exp_type == 'adversarial':
-            self.params = self.params['adversarial']
+        elif self.exp_type == 'cifar_adversarial':
+            self.params = self.params['cifar_adversarial']
         elif self.exp_type == 'mnist_adversarial':
             self.params = self.params['mnist_adversarial']
         else:
@@ -99,13 +100,9 @@ class Experiment:
             dataloaders = {'train': trainloader,
                            'test': testloader,
                            'classes': classes}
-        elif self.exp_type == 'adversarial':
-            trainloader, testloader, classes = create_adversarial_cifar10_dataloaders(data_folder,
-                                                                                      os.path.join(
-                                                                                          'data', 'adversarial_sign'),
-                                                                                      self.params['epsilon'],
-                                                                                      self.params['batch_size'],
-                                                                                      self.params['num_workers'])
+        elif self.exp_type == 'cifar_adversarial':
+            trainloader, testloader, classes = create_cifar10_dataloaders(data_folder, self.params['batch_size'],
+                                                                          self.params['num_workers'])
             dataloaders = {'train': trainloader,
                            'test': testloader,
                            'classes': classes}
@@ -135,8 +132,11 @@ class Experiment:
             model = load_pretrained_resnet20_cifar10_model(resnet20())
         elif self.exp_type == 'pnml_mnist':
             model = Net()
-        elif self.exp_type == 'adversarial':
-            model = load_pretrained_resnet20_cifar10_model(resnet20())
+        elif self.exp_type == 'cifar_adversarial':
+            # model = load_pretrained_resnet20_cifar10_model(resnet20())
+            # model = resnet110()
+            # model = WideResNet()
+            model = MadryWideResNet(depth=34, num_classes=10, widen_factor=10, dropRate=0.0)
         elif self.exp_type == 'mnist_adversarial':
             if model_arch == 'Net':
                 model = Net()
@@ -163,8 +163,8 @@ class Experiment:
             name = 'out_of_dist_noise'
         elif self.exp_type == 'pnml_mnist':
             name = 'pnml_mnist'
-        elif self.exp_type == 'adversarial':
-            name = 'adversarial'
+        elif self.exp_type == 'cifar_adversarial':
+            name = 'cifar_adversarial'
         elif self.exp_type == 'mnist_adversarial':
             name = 'mnist_adversarial'
         else:

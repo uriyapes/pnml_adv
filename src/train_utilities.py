@@ -34,7 +34,6 @@ class TrainClass:
         :param attack_type: options: fgsm, pgd and none
         """
 
-        self.num_epochs = 20
         self.logger = logger if logger is not None else logging.StreamHandler(sys.stdout)
         self.eval_test_during_train = True
         self.eval_test_in_end = True
@@ -49,7 +48,7 @@ class TrainClass:
         self.scheduler = optim.lr_scheduler.MultiStepLR(self.optimizer,
                                                         milestones=step_size,
                                                         gamma=gamma)
-        self.freeze_batch_norm = True
+        self.freeze_batch_norm = False
         self.adv_learn_alpha = adv_learn_alpha
         self.adv_learn_eps = adv_learn_eps
         self.attack_type = attack_type
@@ -57,7 +56,7 @@ class TrainClass:
         self.pgd_step = pgd_step
         self.pgd_random = pgd_random
 
-    def train_model(self, model, dataloaders, num_epochs: int = 10, acc_goal=None,
+    def train_model(self, model, dataloaders, num_epochs: int = 10, acc_goal=None, eval_test_every_n_epoch: int = 1,
                     sample_test_data=None, sample_test_true_label=None):
         """
         Train DNN model using some trainset.
@@ -73,20 +72,19 @@ class TrainClass:
         attack = get_attack(self.attack_type, model, self.adv_learn_eps, self.pgd_iter, self.pgd_step,
                             self.pgd_random, (mnist_min_val, mnist_max_val))
 
-        self.num_epochs = num_epochs
         train_loss, train_acc = torch.tensor([-1.]), torch.tensor([-1.])
         epoch_time = 0
-        lr = 0
 
         # Loop on epochs
-        for epoch in range(self.num_epochs):
+        for epoch in range(num_epochs):
 
             epoch_start_time = time.time()
             total_loss_in_epoch, train_loss, train_acc = self.__train(model, dataloaders['train'], attack,
                                                                       sample_test_data, sample_test_true_label)
             if self.eval_test_during_train is True:
-                assert(dataloaders.__contains__('test'))
-                test_loss, test_acc = self.eval(model, dataloaders['test'])
+                assert('test' in dataloaders)
+                if epoch % eval_test_every_n_epoch == 0:
+                    test_loss, test_acc = self.eval(model, dataloaders['test'])
             else:
                 test_loss, test_acc = torch.tensor([-1.]), torch.tensor([-1.])
             epoch_time = time.time() - epoch_start_time
@@ -95,7 +93,7 @@ class TrainClass:
                 lr = param_group['lr']
 
             self.logger.info('[%d/%d] [train test] loss =[%f %f] adv_loss=[%f], acc=[%f %f], lr=%f, epoch_time=%.2f'
-                             % (epoch, self.num_epochs - 1,
+                             % (epoch, num_epochs - 1,
                                 train_loss, test_loss, total_loss_in_epoch, train_acc, test_acc,
                                 lr, epoch_time))
 
@@ -134,6 +132,7 @@ class TrainClass:
         correct = 0
         loss_sample_test = 0
         # max_iter = np.ceil(len(train_loader.dataset) / train_loader.batch_size) #TODO: from some reason I am missing the last batch but the dataloader should not drop the last batch
+        # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         if sample_test_data is not None:
 
             sample_test_data = sample_test_data.cuda() if torch.cuda.is_available() else sample_test_data
@@ -142,11 +141,18 @@ class TrainClass:
             sample_test_true_label.requires_grad = False
 
         # Iterate over dataloaders
+        self.logger.init_debug_time_measure()
+        self.logger.debug("testing...")
         for iter_num, (images, labels) in enumerate(train_loader):
+            self.logger.debug("iter: {}, load data")
 
             # Adjust to CUDA
-            images = images.cuda() if torch.cuda.is_available() else images
-            labels = labels.cuda() if torch.cuda.is_available() else labels
+            images = tensor_to_cuda(images)
+            self.logger.debug("iter: {}, data to CUDA:")
+            labels = tensor_to_cuda(labels)
+            # images = images.to(device)
+            # labels = labels.to(device)
+            self.logger.debug("iter: {}, labels to CUDA:")
 
             # Forward
             self.optimizer.zero_grad()
@@ -154,17 +160,19 @@ class TrainClass:
             _, predicted = torch.max(outputs.data, 1)
             correct += (predicted == labels).sum().item()
             train_loss += loss * len(images)  # loss sum for the epoch
+            self.logger.debug("iter: {}, Forward pass")
 
             # Back-propagation
-
             if self.adv_learn_alpha is 0:
                 loss.backward()
+                self.logger.debug("iter: {}, Backward pass")
             else:
                 # # The loss is averaged over the minibatch, this doesn't matter at all since the loss magnitude
                 # # is only just to determine gradient sign. Each pixel is changed by -+epsilon, no matter
                 # # it's gradient magnitude.
                 adv_images = attack.create_adversarial_sample(images, labels)
                 self.optimizer.zero_grad()
+                self.logger.debug("iter: {}, create adversarial data")
 
                 #### add another sample
                 # TODO: move it outside if, otherwise this won't happen for non-adversarial training
@@ -182,21 +190,54 @@ class TrainClass:
                     # self.optimizer.zero_grad()
                 ####
 
-
                 _, adv_loss = self.__forward_pass(model, adv_images, labels)
-                # outputs = model(adv_images)
-                # adv_loss = TrainClass.criterion(outputs, labels)  # Negative log-loss
+                self.logger.debug("iter: {}, Adv. Forward pass")
+                outputs = model(adv_images)
+                adv_loss = TrainClass.criterion(outputs, labels)  # Negative log-loss
                 total_loss = (1 - self.adv_learn_alpha) * loss + self.adv_learn_alpha * adv_loss #+ loss_sample_test
                 total_loss_in_epoch += total_loss * len(images)
                 total_loss.backward()
+                self.logger.debug("iter: {}, Adv. Backward pass")
 
             self.optimizer.step()
-
+            self.logger.debug("iter: {}, Optimizer step")
         self.scheduler.step()
         train_loss /= len(train_loader.dataset)
         total_loss_in_epoch /= len(train_loader.dataset)
         train_acc = correct / len(train_loader.dataset)
         return total_loss_in_epoch, train_loss, train_acc
+
+
+#     ###################
+#     def train_del(self, model, tr_loader, va_loader=None, adv_train=False):
+#         logger = self.logger
+#
+#         opt = torch.optim.Adam(model.parameters(), 0.01, weight_decay=0.0002)
+#         scheduler = torch.optim.lr_scheduler.MultiStepLR(opt,
+#                                                          milestones=[100, 150],
+#                                                          gamma=0.1)
+#         _iter = 0
+#
+#         logger.init_debug_time_measure()
+#         for epoch in range(1, 200):
+#             scheduler.step()
+#             for data, label in tr_loader:
+#                 logger.debug("iter: {}, load data".format(_iter))
+#                 data, label = tensor_to_cuda(data), tensor_to_cuda(label)
+#                 logger.debug("iter: {}, data to CUDA".format(_iter))
+#                 output = model(data, _eval=False)
+#                 loss = F.cross_entropy(output, label)
+#                 opt.zero_grad()
+#                 loss.backward()
+#                 opt.step()
+#                 logger.debug("iter: {}, Forward/Backward pass".format(_iter))
+#
+#
+#
+#
+#                 _iter += 1
+#
+# ######################## DELETE UNTILL HERE
 
     @classmethod
     def __forward_pass(cls, model, images, labels):
@@ -342,7 +383,7 @@ def execute_pnml_training(train_params: dict, params_init_training: dict, datalo
         train_class = TrainClass(filter(lambda p: p.requires_grad, model.parameters()),
                                  train_params['lr'], train_params['momentum'], train_params['step_size'],
                                  train_params['gamma'], train_params['weight_decay'],
-                                 logger.logger,
+                                 logger,
                                  params_init_training["adv_alpha"], params_init_training["epsilon"],
                                  params_init_training["attack_type"], params_init_training["pgd_iter"],
                                  params_init_training["pgd_step"]
@@ -469,3 +510,8 @@ def freeze_model_layers(model, max_freeze_layer: int, logger):
             continue
         logger.info('UnFreeze Layer: idx={}, name={}'.format(ct, child))
     return model
+
+
+def tensor_to_cuda(tensor: torch.tensor):
+    cuda_tensor = tensor.cuda() if torch.cuda.is_available() else tensor
+    return cuda_tensor

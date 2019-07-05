@@ -17,7 +17,7 @@ class Logger:
 
         # Create logger
         logger = logging.getLogger()
-        logger.setLevel(logging.DEBUG)
+        logger.setLevel(logging.INFO)
 
         ch = logging.StreamHandler(sys.stdout)
         ch.setLevel(logging.DEBUG)
@@ -37,6 +37,7 @@ class Logger:
                                           (experiment_type, self.unique_time)))
         self.define_json_output(os.path.join(self.output_folder, 'results_%s_%s.json' %
                                              (experiment_type, self.unique_time)))
+        self.time = None
 
     def define_log_file(self, log_file_name: str):
         """
@@ -52,9 +53,24 @@ class Logger:
         """
         print and save to log file in logger style info
         :param string_to_print: string that will be display in the log
-        :return: 
+        :return:
         """
         self.logger.info(string_to_print)
+
+    def debug(self, string_to_print: str, measure_time: bool = True):
+        """
+        print and save to log file in logger style info with DEBUG priority
+        :param string_to_print: string that will be display in the log
+        :return:
+        """
+        if self.time is not None and measure_time is True:
+            new_time = time.time()
+            string_to_print = string_to_print + ", time from last debug msg: {}".format(new_time - self.time)
+            self.time = new_time
+        self.logger.debug(string_to_print)
+
+    def init_debug_time_measure(self):
+        self.time = time.time()
 
     def define_json_output(self, json_file_name: str):
         """

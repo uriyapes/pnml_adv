@@ -7,8 +7,8 @@ import argparse
 import torch
 torch.manual_seed(1)
 import numpy as np
-torch.backends.cudnn.deterministic = True
-torch.backends.cudnn.benchmark = False
+# torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = True
 np.random.seed(0)
 
 
@@ -76,15 +76,16 @@ def run_experiment(experiment_type: str, first_idx: int = None, last_idx: int = 
                                  params_init_training['step_size'],
                                  params_init_training['gamma'],
                                  params_init_training['weight_decay'],
-                                 logger.logger,
+                                 logger,
                                  params_init_training["adv_alpha"], params_init_training["epsilon"],
                                  params_init_training["attack_type"], params_init_training["pgd_iter"],
                                  params_init_training["pgd_step"]) # TODO: not all experiments contain adversarial parameters, fix this
-        train_class.eval_test_during_train = False
+        train_class.eval_test_during_train = True if params_init_training['eval_test_every_n_epoch'] is not None else False
         train_class.freeze_batch_norm = False
         acc_goal = params_init_training['acc_goal'] if 'acc_goal' in params_init_training else None
         model_base, train_loss, test_loss = train_class.train_model(model_base, dataloaders,
-                                                                    params_init_training['epochs'], acc_goal)
+                                                                    params_init_training['epochs'], acc_goal,
+                                                                    params_init_training['eval_test_every_n_epoch'])
         torch.save(model_base.state_dict(),
                    os.path.join(logger.output_folder, '%s_model_%f.pt' % (experiment_h.get_exp_name(), train_loss)))
     elif 'initial_training' in params and params['initial_training']['do_initial_training'] is False:
@@ -114,7 +115,7 @@ def run_experiment(experiment_type: str, first_idx: int = None, last_idx: int = 
                              params_fit_to_sample['step_size'],
                              params_fit_to_sample['gamma'],
                              params_fit_to_sample['weight_decay'],
-                             logger.logger,
+                             logger,
                              params_init_training["adv_alpha"], params_init_training["epsilon"],
                              params_init_training["attack_type"], params_init_training["pgd_iter"],
                              params_init_training["pgd_step"])
