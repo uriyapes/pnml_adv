@@ -1,3 +1,4 @@
+# Code is based on https://github.com/oscarknagg/adversarial
 from abc import ABC, abstractmethod
 from adversarial.functional import *
 
@@ -12,8 +13,9 @@ class Attack(ABC):
 class NoAttack(Attack):
     def __init__(self):
         super(NoAttack, self).__init__()
+        self.name = self.__class__.__name__
 
-    def create_adversarial_sample(self, x: torch.Tensor, y: torch.Tensor):
+    def create_adversarial_sample(self, x: torch.Tensor, y: torch.Tensor,  y_target: torch.Tensor = None):
         return x
 
 
@@ -37,6 +39,7 @@ class FGSM(Attack):
         :param: clamp: Max and minimum values of elements in the samples i.e. (0, 1) for MNIST
         """
         super(FGSM, self).__init__()
+        self.name = self.__class__.__name__
         self.model = model
         self.loss_fn = loss_fn()
         self.eps_ratio = eps_ratio
@@ -45,7 +48,9 @@ class FGSM(Attack):
 
     def create_adversarial_sample(self,
                                   x: torch.Tensor,
-                                  y: torch.Tensor):
+                                  y: torch.Tensor,
+                                  y_target: torch.Tensor = None
+                                  ):
         """Creates an adversarial sample
 
         Args:
@@ -55,7 +60,8 @@ class FGSM(Attack):
         Returns:
             x_adv: Adversarially perturbed version of x
         """
-
+        if y_target is not None:
+            raise NotImplementedError
         return fgsm(self.model, x, y, self.loss_fn, self.eps, self.clamp)
 
 
@@ -72,6 +78,7 @@ class PGD(Attack):
                  norm: Union[str, int] = 'inf',
                  restart_num: int = 1):
         super(PGD, self).__init__()
+        self.name = self.__class__.__name__
         self.model = model
         self.loss_fn = loss_fn
         self.eps_ratio = eps_ratio

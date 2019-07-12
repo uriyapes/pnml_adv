@@ -1,6 +1,6 @@
 import os
 
-from dataset_utilities import create_mnist_train_dataloader, create_adv_mnist_test_dataloader
+from dataset_utilities import create_mnist_train_dataloader, create_adv_mnist_test_dataloader_preprocessed
 from dataset_utilities import create_adversarial_cifar10_dataloaders
 from dataset_utilities import create_cifar10_dataloaders
 from dataset_utilities import create_cifar10_random_label_dataloaders
@@ -12,6 +12,8 @@ from mpl import Net, Net_800_400_100, MNISTClassifier, load_pretrained_model
 from resnet import resnet20, resnet56, resnet110, load_pretrained_resnet20_cifar10_model
 from wide_resnet_original import WideResNet
 from models.wide_resnet import WideResNet as MadryWideResNet
+from adversarial.attacks import get_attack
+from dataset_utilities import mnist_max_val, mnist_min_val
 
 
 class Experiment:
@@ -56,8 +58,29 @@ class Experiment:
         self.executed_get_params = True
         return self.params
 
-    def get_dataloaders(self, data_folder: str = './data', testset_black_box_attack=None):
+    def get_adv_dataloaders(self, datafolder, p, model=None):
+        """
+        :param experiment_h: experiment class instance
+        :param datafolder: location of the data
+        :param p: the adversarial attack parameters
+        :param model: the black/white-box model on which the attack will work, if None no attack will run
+        :return: dataloaders dict
+        """
+        if self.exp_type == 'mnist_adversarial':
+            min_val, max_val = mnist_min_val, mnist_max_val
+        elif self.exp_type == 'cifar_adversarial':
+            min_val, max_val = 0, 1
+        else:
+            raise NameError('No experiment type: %s' % self.exp_type)
 
+        if model is None:
+            attack = get_attack("no_attack")
+        else:
+            attack = get_attack(p['attack_type'], model, p['epsilon'], p['pgd_iter'], p['pgd_step'],
+                                p['pgd_rand_start'], (min_val, max_val), p['pgd_test_restart_num'])
+        return self.get_dataloaders(datafolder, attack)
+
+    def get_dataloaders(self, data_folder: str = './data', attack=None):
         if self.executed_get_params is False:
             _ = self.get_params()
 
@@ -101,22 +124,28 @@ class Experiment:
                            'test': testloader,
                            'classes': classes}
         elif self.exp_type == 'cifar_adversarial':
-            trainloader, testloader, classes = create_cifar10_dataloaders(data_folder, self.params['batch_size'],
-                                                                          self.params['num_workers'])
+            assert(attack is not None)
+            trainloader, testloader, classes = create_adversarial_cifar10_dataloaders(attack, data_folder,
+                                                                  self.params['batch_size'], self.params['num_workers'])
+            adv_test_flag = True if attack.name is not "NoAttack" else False  # This flag indicates whether the testset is already adversarial
             dataloaders = {'train': trainloader,
                            'test': testloader,
+                           'adv_test_flag': adv_test_flag,  # This flag indicates whether the testset is already adversarial
                            'classes': classes}
+
+
         elif self.exp_type == 'mnist_adversarial':
+            assert(attack is not None)
             dataloaders = {}
-            trainloader, classes = create_mnist_train_dataloader(data_folder, self.params['batch_size'],
-                                                                 self.params['num_workers'])
-            dataloaders['train'] = trainloader
-            dataloaders['classes'] = classes
-            if testset_black_box_attack is not None:
-                testloader, _ = create_adv_mnist_test_dataloader(testset_black_box_attack, data_folder, self.params['batch_size'], self.params['num_workers'])
-                dataloaders['test'] = testloader
+            dataloaders['train'], dataloaders['classes'] = create_mnist_train_dataloader(data_folder,
+                                                                 self.params['batch_size'], self.params['num_workers'])
+
+            dataloaders['adv_test_flag'] = True if attack.name is not "NoAttack" else False # This flag indicates whether the testset is already adversarial
+            dataloaders['test'], _ = create_adv_mnist_test_dataloader_preprocessed(attack, data_folder,
+                                                                 self.params['batch_size'], self.params['num_workers'])
         else:
             raise NameError('No experiment type: %s' % self.exp_type)
+
 
         return dataloaders
 
@@ -136,7 +165,10 @@ class Experiment:
             # model = load_pretrained_resnet20_cifar10_model(resnet20())
             # model = resnet110()
             # model = WideResNet()
-            model = MadryWideResNet(depth=34, num_classes=10, widen_factor=10, dropRate=0.0)
+            if model_arch == 'wide_resnet':
+                model = MadryWideResNet(depth=34, num_classes=10, widen_factor=10, dropRate=0.0)
+            else:
+                raise NameError('No model_arch type %s for %s experiment' % (str(model_arch), self.exp_type))
         elif self.exp_type == 'mnist_adversarial':
             if model_arch == 'Net':
                 model = Net()
@@ -145,7 +177,7 @@ class Experiment:
             elif model_arch == 'MNISTClassifier':
                 model = MNISTClassifier()
             else:
-                raise NameError('No model_arch type %s' % str(model_arch))
+                raise NameError('No model_arch type %s for %s experiment' % (str(model_arch), self.exp_type))
         else:
             raise NameError('No experiment type: %s' % self.exp_type)
 

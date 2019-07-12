@@ -101,7 +101,7 @@ def create_svhn_dataloaders(data_dir: str = './data', batch_size: int = 128, num
     return trainloader, testloader, classes_svhn, classes_cifar10
 
 
-class transfrom_per_img_norm(object):
+class transfrom_per_img_per_ch_norm(object):
     def __init__(self):
         pass
 
@@ -134,9 +134,9 @@ def create_cifar10_dataloaders(data_dir: str = './data', batch_size: int = 128, 
             transforms.ToPILImage(),
             transforms.RandomCrop(32),
             transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(), transfrom_per_img_norm()# TODO: check per image normalization works good
+            transforms.ToTensor(), transfrom_per_img_per_ch_norm()# TODO: check per image normalization works good
         ])
-        cifar_transform_test = transforms.Compose([transforms.ToTensor(), transfrom_per_img_norm()])
+        cifar_transform_test = transforms.Compose([transforms.ToTensor(), transfrom_per_img_per_ch_norm()])
     else:
         cifar_transform_train = transforms.Compose([transforms.ToTensor(), normalize])
         cifar_transform_test = transforms.Compose([transforms.ToTensor(), normalize])
@@ -344,12 +344,64 @@ class CIFAR10Adversarial(datasets.CIFAR10):
             self.test_data[index] = np.clip(self.test_data[index] + (epsilon * 255) * sign, 0, 255)
 
 
-def create_adversarial_cifar10_dataloaders(data_dir: str = './data',
-                                           adversarial_dir: str = os.path.join('data',
-                                                                               'adversarial_sign'),
-                                           epsilon: float = 0.05,
-                                           batch_size: int = 128,
-                                           num_workers: int = 4):
+class CIFAR10AdversarialTest(datasets.CIFAR10):
+    """
+    Implementing adversarial attack to CIFAR10 testset.
+    """
+    def __init__(self, attack, transform, **kwargs):
+        """
+
+        :param attack: the attack that will be activate on the original MNIST testset
+        :param transform: use the transform (for dataset normalizations) prior to using the attack
+        :param kwargs: initial init arguments for datasets.MNIST.
+        """
+        super(CIFAR10AdversarialTest, self).__init__(**kwargs)
+        assert(self.train is False)
+        grp_size = 50
+        test_samples = int(self.test_data.shape[0] / 30)  # TODO: remove division by 30
+        test_samples = 50 # TODO: REMOVE
+        test_adv_data = torch.zeros([test_samples, 3, 32, 32])
+        from visual_utilities import plt_img
+        plt_img(self.test_data, 2)
+        for index in range(test_samples):
+            # use the transform on all the testset
+            img = Image.fromarray(self.test_data[index])
+            test_adv_data[index] = transform(img)
+        plt_img(test_adv_data, 2)
+        self.test_data = test_adv_data
+        self.test_labels = torch.LongTensor(self.test_labels[0:test_samples])
+
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        for index in range(int(test_samples / grp_size)):
+            print(index)
+            # save the adversarial testset
+            self.test_data[index * grp_size:(index + 1) * grp_size] = attack.create_adversarial_sample(
+                self.test_data[index * grp_size:(index + 1) * grp_size].to(device),
+                self.test_labels[index * grp_size:(index + 1) * grp_size].to(device))
+
+        self.test_data = self.test_data.to("cpu")
+        self.transform = null_transform
+        plt_img(self.test_data, 2)
+
+    def __getitem__(self, index):
+        """
+        Overwrite __getitem__  from datasets.MNIST in order to return pre-saved adversarial values
+        Args:
+            index (int): Index
+
+        Returns:
+            tuple: (image, target) where target is index of the target class.
+        """
+
+        target = self.test_labels[index]
+        if self.target_transform is not None:
+            target = self.target_transform(target)
+        img = self.test_data[index]
+        return img, target
+
+
+def create_adversarial_cifar10_dataloaders(attack, data_dir: str = './data', batch_size: int = 128, num_workers: int = 4,
+                                           train_augmentation: bool = True):
     """
     create train and test pytorch dataloaders for CIFAR10 dataset
     :param data_dir: the folder that will contain the data
@@ -359,28 +411,41 @@ def create_adversarial_cifar10_dataloaders(data_dir: str = './data',
     :param num_workers: number of cpu workers which loads the GPU with the dataset
     :return: train and test loaders along with mapping between labels and class names
     """
+    if train_augmentation:
+        # Same transformation as in https://github.com/MadryLab/cifar10_challenge/blob/master/cifar10_input.py (Line 95)
+        # No mean-std normalization were used.
+        cifar_transform_train = transforms.Compose([
+            transforms.ToTensor(),
+            transforms.Lambda(lambda x: torch.nn.functional.pad(x.unsqueeze(0),
+                              (4, 4, 4, 4), mode='constant', value=0).squeeze()),
+            transforms.ToPILImage(),
+            transforms.RandomCrop(32),
+            transforms.RandomHorizontalFlip(),
+            transforms.ToTensor(), transfrom_per_img_per_ch_norm()# TODO: integrate normalization inside the model to be as per_image_standardization (https://github.com/tensorflow/tensorflow/blob/r1.14/tensorflow/python/ops/image_ops_impl.py)
+        ])
+        cifar_transform_test = transforms.Compose([transforms.ToTensor(), transfrom_per_img_per_ch_norm()])
+    else:
+        cifar_transform_train = transforms.Compose([transforms.ToTensor(), normalize])
+        cifar_transform_test = transforms.Compose([transforms.ToTensor(), normalize])
     trainset = datasets.CIFAR10(root=data_dir,
                                 train=True,
                                 download=True,
-                                transform=transforms.Compose([transforms.ToTensor(),
-                                                              normalize]))
+                                transform=cifar_transform_train)
     trainloader = data.DataLoader(trainset,
                                   batch_size=batch_size,
                                   shuffle=False,
                                   num_workers=num_workers)
 
-    adversarial_sign_dataset_path = create_adversarial_sign_dataset(data_dir, output_folder=adversarial_dir)
-    testset = CIFAR10Adversarial(root=data_dir,
+    testset = CIFAR10AdversarialTest(root=data_dir,
                                  train=False,
                                  download=True,
-                                 transform=transforms.Compose([transforms.ToTensor(),
-                                                               normalize]),
-                                 adversarial_sign_dataset_path=adversarial_sign_dataset_path,
-                                 epsilon=epsilon)
+                                 transform=cifar_transform_test,
+                                 attack=attack)
     testloader = data.DataLoader(testset,
                                  batch_size=batch_size,
                                  shuffle=False,
                                  num_workers=num_workers)
+
     classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
     return trainloader, testloader, classes
@@ -430,7 +495,7 @@ class MnistAdversarialTest(datasets.MNIST):
         grp_size = 100
         test_samples = int(self.test_data.shape[0] / 30)# TODO: remove division by 30
         test_adv_data = torch.zeros([test_samples, 1, 28, 28])
-        from test_net_script import plt_img
+        from visual_utilities import plt_img
         plt_img(self.test_data, 0)
         for index in range(test_samples):
             # use the transform on all the testset
@@ -447,7 +512,7 @@ class MnistAdversarialTest(datasets.MNIST):
                                                 self.test_labels[index*grp_size:(index+1)*grp_size].to(device))
 
         self.test_data = self.test_data.to("cpu")
-        self.transform = self.null_transform
+        self.transform = null_transform
         plt_img(self.test_data, 0)
 
     def __getitem__(self, index):
@@ -466,12 +531,8 @@ class MnistAdversarialTest(datasets.MNIST):
         img = self.test_data[index]
         return img, target
 
-    @staticmethod
-    def null_transform(x):
-        """
-        Overwrite the transform in datasets.MNIST (None) and return the input.
-        """
-        return x
+
+
 
 
 # def create_adversarial_mnist_dataloaders(data_dir: str = './data', load_sign_dataset:bool = False,
@@ -523,9 +584,9 @@ class MnistAdversarialTest(datasets.MNIST):
 #     return trainloader, testloader, classes
 
 
-def create_adv_mnist_test_dataloader(attack, data_dir: str = './data', batch_size: int = 128, num_workers: int = 4):
+def create_adv_mnist_test_dataloader_preprocessed(attack, data_dir: str = './data', batch_size: int = 128, num_workers: int = 4):
     """
-    create train and test pytorch dataloaders for MNIST dataset
+    Create adversarial test  dataloader for MNIST dataset. The data in the dataloader.dataset is already adversarial.
     :param attack: get instace of the adversarial attack
     :param data_dir: the folder that will contain the data
     :param batch_size: the size of the batch for test and train loaders
@@ -546,16 +607,6 @@ def create_adv_mnist_test_dataloader(attack, data_dir: str = './data', batch_siz
                                  num_workers=num_workers,
                                  pin_memory=True)
 
-    # testset = datasets.MNIST(root=data_dir,
-    #                          train=False,
-    #                          download=True,
-    #                          transform=transforms.Compose([transforms.ToTensor(),
-    #                                                        normalize_mnist]))
-    #
-    # testloader = data.DataLoader(testset,
-    #                              batch_size=batch_size,
-    #                              shuffle=False,
-    #                              num_workers=num_workers)
     classes = ('0', '1', '2', '3', '4', '5', '6', '7', '8', '9')
 
     return testloader, classes
@@ -608,3 +659,10 @@ def create_mnist_train_dataloader(data_dir: str = './data', batch_size: int = 12
     classes = ('0', '1', '2', '3', '4', '5', '6', '7', '8', '9')
 
     return trainloader, classes
+
+
+def null_transform(x):
+    """
+    Overwrite the transform in datasets.MNIST (None) and return the input.
+    """
+    return x

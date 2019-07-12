@@ -73,6 +73,8 @@ class TrainClass:
                             self.pgd_random, (mnist_min_val, mnist_max_val))
 
         train_loss, train_acc = torch.tensor([-1.]), torch.tensor([-1.])
+        # If testset is already adversarial then do nothing else use the same attack to generate adversarial testset
+        testset_attack = get_attack("no_attack") if dataloaders['adv_test_flag'] else attack  # TODO: replace training attack with testing attack
         epoch_time = 0
 
         # Loop on epochs
@@ -81,10 +83,9 @@ class TrainClass:
             epoch_start_time = time.time()
             total_loss_in_epoch, train_loss, train_acc = self.__train(model, dataloaders['train'], attack,
                                                                       sample_test_data, sample_test_true_label)
-            if self.eval_test_during_train is True:
-                assert('test' in dataloaders)
-                if epoch % eval_test_every_n_epoch == 0:
-                    test_loss, test_acc = self.eval(model, dataloaders['test'])
+            # Evaluate
+            if self.eval_test_during_train is True and epoch % eval_test_every_n_epoch == 0:
+                test_loss, test_acc = self.eval(model, dataloaders['test'], testset_attack)
             else:
                 test_loss, test_acc = torch.tensor([-1.]), torch.tensor([-1.])
             epoch_time = time.time() - epoch_start_time
@@ -101,11 +102,7 @@ class TrainClass:
             if acc_goal is not None and train_acc >= acc_goal:
                 break
 
-        if 'test' in dataloaders:
-            test_loss, test_acc = self.eval(model, dataloaders['test'])
-        else:
-            test_loss, test_acc = torch.tensor([-1.]), torch.tensor([-1.])
-
+        test_loss, test_acc = self.eval(model, dataloaders['test'], testset_attack)
         train_loss_output = float(train_loss.cpu().detach().numpy().round(16))
         test_loss_output = float(test_loss.cpu().detach().numpy().round(16))
         # Print and save
@@ -144,15 +141,13 @@ class TrainClass:
         self.logger.init_debug_time_measure()
         self.logger.debug("testing...")
         for iter_num, (images, labels) in enumerate(train_loader):
-            self.logger.debug("iter: {}, load data")
+            self.logger.debug("iter: {}, load data".format(iter_num))
 
             # Adjust to CUDA
-            images = tensor_to_cuda(images)
-            self.logger.debug("iter: {}, data to CUDA:")
-            labels = tensor_to_cuda(labels)
+            images, labels = tensor_to_cuda(images), tensor_to_cuda(labels)
+            self.logger.debug("iter: {}, data and labels to CUDA:".format(iter_num))
             # images = images.to(device)
             # labels = labels.to(device)
-            self.logger.debug("iter: {}, labels to CUDA:")
 
             # Forward
             self.optimizer.zero_grad()
@@ -160,19 +155,19 @@ class TrainClass:
             _, predicted = torch.max(outputs.data, 1)
             correct += (predicted == labels).sum().item()
             train_loss += loss * len(images)  # loss sum for the epoch
-            self.logger.debug("iter: {}, Forward pass")
+            self.logger.debug("iter: {}, Forward pass".format(iter_num))
 
             # Back-propagation
             if self.adv_learn_alpha is 0:
                 loss.backward()
-                self.logger.debug("iter: {}, Backward pass")
+                self.logger.debug("iter: {}, Backward pass".format(iter_num))
             else:
                 # # The loss is averaged over the minibatch, this doesn't matter at all since the loss magnitude
                 # # is only just to determine gradient sign. Each pixel is changed by -+epsilon, no matter
                 # # it's gradient magnitude.
                 adv_images = attack.create_adversarial_sample(images, labels)
                 self.optimizer.zero_grad()
-                self.logger.debug("iter: {}, create adversarial data")
+                self.logger.debug("iter: {}, create adversarial data".format(iter_num))
 
                 #### add another sample
                 # TODO: move it outside if, otherwise this won't happen for non-adversarial training
@@ -191,16 +186,16 @@ class TrainClass:
                 ####
 
                 _, adv_loss = self.__forward_pass(model, adv_images, labels)
-                self.logger.debug("iter: {}, Adv. Forward pass")
+                self.logger.debug("iter: {}, Adv. Forward pass".format(iter_num))
                 outputs = model(adv_images)
                 adv_loss = TrainClass.criterion(outputs, labels)  # Negative log-loss
                 total_loss = (1 - self.adv_learn_alpha) * loss + self.adv_learn_alpha * adv_loss #+ loss_sample_test
                 total_loss_in_epoch += total_loss * len(images)
                 total_loss.backward()
-                self.logger.debug("iter: {}, Adv. Backward pass")
+                self.logger.debug("iter: {}, Adv. Backward pass".format(iter_num))
 
             self.optimizer.step()
-            self.logger.debug("iter: {}, Optimizer step")
+            self.logger.debug("iter: {}, Optimizer step".format(iter_num))
         self.scheduler.step()
         train_loss /= len(train_loader.dataset)
         total_loss_in_epoch /= len(train_loader.dataset)
@@ -246,7 +241,7 @@ class TrainClass:
         return outputs, loss
 
     @classmethod
-    def eval(cls, model, dataloader):
+    def eval(cls, model, dataloader, attack = get_attack("no_attack")):
         """
         Evaluate the performance of the model on the train/test sets.
         :param model: the model that will be evaluated.
@@ -256,13 +251,14 @@ class TrainClass:
         model.eval()
         loss = 0
         correct = 0
-        with torch.no_grad():
-            for data, labels in dataloader:
-                data = data.cuda() if torch.cuda.is_available() else data
-                labels = labels.cuda() if torch.cuda.is_available() else labels
-
-                outputs, batch_loss = cls.__forward_pass(model, data, labels)
-                loss += batch_loss * len(data)  # loss sum for all the batch
+        for iter_num, (data, labels) in enumerate(dataloader):
+            print("iter_num: {}".format(iter_num))
+            data = data.cuda() if torch.cuda.is_available() else data
+            labels = labels.cuda() if torch.cuda.is_available() else labels
+            adv_data = attack.create_adversarial_sample(data, labels)
+            with torch.no_grad():
+                outputs, batch_loss = cls.__forward_pass(model, adv_data, labels)
+                loss += batch_loss * len(adv_data)  # loss sum for all the batch
                 _, predicted = torch.max(outputs.data, 1)
                 correct += (predicted == labels).sum().item()
 
@@ -290,15 +286,17 @@ def eval_single_sample(model, test_sample_data):
     # sample_data = test_sample_data.cuda() if torch.cuda.is_available() else test_sample_data
     if len(sample_data.shape) == 3:
         sample_data = sample_data.unsqueeze(0)  # make the single sample 4-dim tensor
-    output = model(sample_data)
 
-    # Prediction
-    pred = output.max(1, keepdim=True)[1]
-    pred = pred.cpu().detach().numpy().round(16)[0][0]
+    with torch.no_grad():
+        output = model(sample_data).detach().cpu()
 
-    # Extract prob
-    prob = F.softmax(output, dim=-1)
-    prob = prob.cpu().detach().numpy().round(16).tolist()[0]
+        # Prediction
+        pred = output.max(1, keepdim=True)[1]
+        pred = pred.numpy().round(16)[0][0]
+
+        # Extract prob
+        prob = F.softmax(output, dim=-1)
+        prob = prob.numpy().round(16).tolist()[0]
     return prob, pred
 
 
@@ -470,12 +468,13 @@ def execute_pnml_adv_fix(pnml_params: dict, params_init_training: dict, dataload
 
 
         # Evaluate with base model
+        assert(not model.training)
         x_refine = refinement.create_adversarial_sample(sample_test_data_trans, true_label_expand, fix_label_expand)
         prob, pred = eval_single_sample(model, x_refine)
 
         global execute_pnml_adv_fix_ind
         if execute_pnml_adv_fix_ind == 0:
-            from test_net_script import plt_img
+            from visual_utilities import plt_img
             plt_img(x_refine, 0)
 
 
@@ -513,5 +512,4 @@ def freeze_model_layers(model, max_freeze_layer: int, logger):
 
 
 def tensor_to_cuda(tensor: torch.tensor):
-    cuda_tensor = tensor.cuda() if torch.cuda.is_available() else tensor
-    return cuda_tensor
+    return tensor.cuda() if torch.cuda.is_available() else tensor

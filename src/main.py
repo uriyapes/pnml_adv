@@ -17,8 +17,8 @@ from logger_utilities import Logger
 from train_utilities import TrainClass, eval_single_sample, execute_pnml_training, execute_pnml_adv_fix
 from train_utilities import freeze_model_layers
 from mpl import load_pretrained_model
-from adversarial.attacks import get_attack
-from dataset_utilities import mnist_max_val, mnist_min_val
+from visual_utilities import plt_img
+
 
 """
 Example of running:
@@ -47,22 +47,16 @@ def run_experiment(experiment_type: str, first_idx: int = None, last_idx: int = 
     logger.info(params)
 
     ################
-    # Load datasets
+    # Create dataloaders
     data_folder = './data'
     logger.info('Load datasets: %s' % data_folder)
-
     # Create a black-box attack for the testset using the model from black_box_model_path
     if params['adv_attack_test']['white_box'] is False:
-        p = params['adv_attack_test']
-        model = load_pretrained_model(experiment_h.get_model(p['black_box_model_arch']), p['black_box_model_path'])
-        attack = get_attack(p['attack_type'], model, p['epsilon'], p['pgd_iter'], p['pgd_step'],
-                            p['pgd_rand_start'], (mnist_min_val, mnist_max_val), p['pgd_test_restart_num'])
-        dataloaders = experiment_h.get_dataloaders(data_folder, attack)
+        model = load_pretrained_model(experiment_h.get_model(params['adv_attack_test']['black_box_model_arch']),
+                                      params['adv_attack_test']['black_box_model_path'])
     else:
-        # The testset is based on whitebox attack, therefore no need to create the testset in advance
-        dataloaders = experiment_h.get_dataloaders(data_folder, None)
-
-
+        model = None
+    dataloaders = experiment_h.get_adv_dataloaders(data_folder, params['adv_attack_test'], model)
 
     ################
     # Run basic training- so the base model will be in the same conditions as NML model
@@ -94,10 +88,7 @@ def run_experiment(experiment_type: str, first_idx: int = None, last_idx: int = 
 
     # Create a white-box attack and use it to create the testset
     if params['adv_attack_test']['white_box'] is True:
-        p = params['adv_attack_test']
-        attack = get_attack(p['attack_type'], model_base, p['epsilon'], p['pgd_iter'], p['pgd_step'],
-                            p['pgd_rand_start'], (mnist_min_val, mnist_max_val), p['pgd_test_restart_num'])
-        dataloaders = experiment_h.get_dataloaders(data_folder, attack)
+        dataloaders = experiment_h.get_adv_dataloaders(data_folder, params['adv_attack_test'], model_base)
 
     ############################
     # Freeze layers
@@ -106,7 +97,6 @@ def run_experiment(experiment_type: str, first_idx: int = None, last_idx: int = 
 
     ############################
     # Train ERM model to be as same as PNML
-    logger.info('Train ERM model')
     params_fit_to_sample = params['fit_to_sample']
     model_erm = copy.deepcopy(model_base)
     train_class = TrainClass(filter(lambda p: p.requires_grad, model_erm.parameters()),
@@ -119,13 +109,16 @@ def run_experiment(experiment_type: str, first_idx: int = None, last_idx: int = 
                              params_init_training["adv_alpha"], params_init_training["epsilon"],
                              params_init_training["attack_type"], params_init_training["pgd_iter"],
                              params_init_training["pgd_step"])
-    base_train_loss, base_train_acc = train_class.eval(model_base, dataloaders['train'])
+    # plt_img(next(iter(dataloaders['test']))[0], 2)
+    # base_train_loss, base_train_acc = train_class.eval(model_base, dataloaders['train'])
+    base_train_loss, base_train_acc = -1,-1 # TODO: REMOVE
     base_test_loss, base_test_acc = train_class.eval(model_base, dataloaders['test'])
-    logger.info('Base model ----- [train test] loss =[%f %f] acc=[%f %f]' %
+    logger.info('Base model ----- [Natural-train test] loss =[%f %f] acc=[%f %f]' %
                 (base_train_loss, base_test_loss, base_train_acc, base_test_acc))
 
     train_class.eval_test_during_train = True
     if params_fit_to_sample['pnml_train_or_fix'] is "train":
+        logger.info('Train ERM model')
         model_erm, train_loss, test_loss = train_class.train_model(model_erm, dataloaders,
                                                                params_fit_to_sample['epochs'])
     ############################
@@ -140,6 +133,7 @@ def run_experiment(experiment_type: str, first_idx: int = None, last_idx: int = 
         # sample_test_true_label = dataloaders['test'].dataset.test_labels[idx]
         # sample_test_data_trans = sample_test_data
         sample_test_data_trans, sample_test_true_label = dataloaders['test'].dataset[idx]  # by accessing the data using .dataset[idx] we preform __get_item__ method which preforms all needed transformations
+
         # # Make sure the data is HxWxC:
         # if len(sample_test_data.shape) == 3 and sample_test_data.shape[2] > sample_test_data.shape[0]:
         #     sample_test_data = sample_test_data.transpose([1, 2, 0])
@@ -151,7 +145,8 @@ def run_experiment(experiment_type: str, first_idx: int = None, last_idx: int = 
         # sample_test_data_trans = dataloaders['test'].dataset.transform(sample_test_data_for_trans)
 
         # Evaluate with base model
-        prob_org, _ = eval_single_sample(model_erm, sample_test_data_trans)
+        # plt_img(next(iter(dataloaders['test']))[0], 2)
+        prob_org, _ = eval_single_sample(model_base, sample_test_data_trans)
         logger.add_org_prob_to_results_dict(idx, prob_org, sample_test_true_label)
 
         if params_fit_to_sample["pnml_train_or_fix"] == "train":

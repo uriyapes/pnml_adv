@@ -100,13 +100,7 @@ class WideResNet(nn.Module):
             elif isinstance(m, nn.Linear):
                 m.bias.data.zero_()
 
-    def forward(self, x, _eval=False):
-        if _eval:
-            # switch to eval mode
-            self.eval()
-        else:
-            self.train()
-
+    def forward(self, x):
         out = self.conv1(x)
         out = self.block1(out)
         out = self.block2(out)
@@ -114,8 +108,6 @@ class WideResNet(nn.Module):
         out = self.relu(self.bn1(out))
         out = F.avg_pool2d(out, 8)  # The size of each channel in the end (after passing through two strides of two 32/4=8)
         out = out.view(-1, self.nChannels)
-
-        self.train()
 
         return self.fc(out)
 
