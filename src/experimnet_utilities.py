@@ -69,7 +69,7 @@ class Experiment:
         if self.exp_type == 'mnist_adversarial':
             min_val, max_val = mnist_min_val, mnist_max_val
         elif self.exp_type == 'cifar_adversarial':
-            min_val, max_val = 0, 1
+            min_val, max_val = -5, 5
         else:
             raise NameError('No experiment type: %s' % self.exp_type)
 

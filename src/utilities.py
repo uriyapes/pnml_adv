@@ -1,9 +1,10 @@
+from abc import ABC, abstractmethod
 import matplotlib.pyplot as plt
-from dataset_utilities import *
 import numpy as np
+import torch
 
 
-print(os.getcwd()) #print working dir
+# print(os.getcwd()) #print working dir
 def plt_adv_mnist_img(testloader = None):
     # trainloader, testloader, classes = create_adversarial_mnist_dataloaders(data_dir='./data', adversarial_dir='./data/mnist_adversarial_sign_batch', epsilon=0.25)
 
@@ -37,3 +38,39 @@ def plt_img(image_batch, index=0):
     plt.imshow(img, cmap='gray')  #  cmap ignored if img is 3-D
     plt.show()
 
+
+class TorchUtils(ABC):
+    __device__ = None
+    @classmethod
+    @abstractmethod
+    def to_device(cls, tensor: torch.tensor):
+        if cls.__device__ is None:
+            cls._auto_select_device()
+        return tensor.to(cls.get_device())
+
+    @classmethod
+    @abstractmethod
+    def set_device(cls, device):
+        """
+        Set the device that will do the calculations. This method should be called once in the start of your code.
+        :param device: 'cuda' for GPU, 'cpu' or None
+        :return:
+        """
+        if cls.__device__ is None:
+            cls.__device__ = device
+        else:
+            raise Exception("device was already set")
+
+    @classmethod
+    @abstractmethod
+    def get_device(cls):
+        if cls.__device__ is None:
+            cls._auto_select_device()
+        return cls.__device__
+
+    @classmethod
+    @abstractmethod
+    def _auto_select_device(cls):
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        print("Setting device for pytorch: " + device)
+        cls.set_device(device)

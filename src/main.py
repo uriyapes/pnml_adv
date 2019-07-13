@@ -17,8 +17,8 @@ from logger_utilities import Logger
 from train_utilities import TrainClass, eval_single_sample, execute_pnml_training, execute_pnml_adv_fix
 from train_utilities import freeze_model_layers
 from mpl import load_pretrained_model
-from visual_utilities import plt_img
-
+from utilities import plt_img, TorchUtils
+TorchUtils.set_device(None)  # 'cuda' or 'cpu' or None
 
 """
 Example of running:

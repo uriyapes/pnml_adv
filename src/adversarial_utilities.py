@@ -11,6 +11,7 @@ from torchvision import transforms, datasets
 from resnet import load_pretrained_resnet32_cifar10_model
 from resnet import resnet32
 from mpl import Net, Net_800_400_100, load_pretrained_model
+from utilities import TorchUtils
 
 
 # Normalization for CIFAR10 dataset
@@ -37,14 +38,13 @@ def create_adversarial_sign_dataset(data_folder='./data',
 
     model = model.cuda() if torch.cuda.is_available() else model
     model.eval()
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Accuracy counter
     criterion = nn.CrossEntropyLoss()
     # Loop over all examples in test set
     for iter_num, (image, target) in enumerate(testloader):
         # Send the image and label to the device
-        image, target = image.to(device), target.to(device)
+        image, target = TorchUtils.to_device(image), TorchUtils.to_device(target)
 
         # Set requires_grad attribute of tensor. Important for Attack
         image.requires_grad = True
@@ -93,14 +93,13 @@ def create_adversarial_mnist_sign_dataset(data_dir, load_sign_dataset, adversari
 
     model = model.cuda() if torch.cuda.is_available() else model
     model.eval()
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # Accuracy counter
     criterion = nn.CrossEntropyLoss()
     # Loop over all examples in test set
     for iter_num, (image, target) in enumerate(testloader):
         # Send the image and label to the device
-        image, target = image.to(device), target.to(device)
+        image, target = TorchUtils.to_device(image), TorchUtils.to_device(target)
 
         # Set requires_grad attribute of tensor. Important for Attack
         image.requires_grad = True

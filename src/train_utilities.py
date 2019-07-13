@@ -11,6 +11,7 @@ import torch.optim as optim
 from torch import nn
 from adversarial.attacks import get_attack
 from dataset_utilities import insert_sample_to_dataset, mnist_min_val, mnist_max_val
+from utilities import TorchUtils
 
 
 class TrainClass:
@@ -67,8 +68,8 @@ class TrainClass:
         :return: trained model (also the training of the models happen inplace)
                  and the loss of the trainset and testset.
         """
-        print("Use GPU:" + str(torch.cuda.is_available()))
-        model = model.cuda() if torch.cuda.is_available() else model
+        self.logger.info("Use device:" + TorchUtils.get_device())
+        model = TorchUtils.to_device(model)
         attack = get_attack(self.attack_type, model, self.adv_learn_eps, self.pgd_iter, self.pgd_step,
                             self.pgd_random, (mnist_min_val, mnist_max_val))
 
@@ -132,8 +133,7 @@ class TrainClass:
         # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         if sample_test_data is not None:
 
-            sample_test_data = sample_test_data.cuda() if torch.cuda.is_available() else sample_test_data
-            sample_test_true_label = sample_test_true_label.cuda() if torch.cuda.is_available() else sample_test_true_label
+            sample_test_data, sample_test_true_label = TorchUtils.to_device(sample_test_data),TorchUtils.to_device(sample_test_true_label)
             sample_test_data.requires_grad = False
             sample_test_true_label.requires_grad = False
 
@@ -144,7 +144,7 @@ class TrainClass:
             self.logger.debug("iter: {}, load data".format(iter_num))
 
             # Adjust to CUDA
-            images, labels = tensor_to_cuda(images), tensor_to_cuda(labels)
+            images, labels = TorchUtils.to_device(images), TorchUtils.to_device(labels)
             self.logger.debug("iter: {}, data and labels to CUDA:".format(iter_num))
             # images = images.to(device)
             # labels = labels.to(device)
@@ -253,8 +253,7 @@ class TrainClass:
         correct = 0
         for iter_num, (data, labels) in enumerate(dataloader):
             print("iter_num: {}".format(iter_num))
-            data = data.cuda() if torch.cuda.is_available() else data
-            labels = labels.cuda() if torch.cuda.is_available() else labels
+            data, labels = TorchUtils.to_device(data), TorchUtils.to_device(labels)
             adv_data = attack.create_adversarial_sample(data, labels)
             with torch.no_grad():
                 outputs, batch_loss = cls.__forward_pass(model, adv_data, labels)
@@ -279,11 +278,11 @@ def eval_single_sample(model, test_sample_data):
     # Test the sample
     model.eval()
 
-    if next(model.parameters()).is_cuda:  # This only checks the first iteration from parameters(), a better way is to loop over all parameters
-        sample_data = test_sample_data.cuda()
-    else:
-        sample_data = test_sample_data.cpu()
-    # sample_data = test_sample_data.cuda() if torch.cuda.is_available() else test_sample_data
+    # if next(model.parameters()).is_cuda:  # This only checks the first iteration from parameters(), a better way is to loop over all parameters
+    #     sample_data = test_sample_data.cuda()
+    # else:
+    #     sample_data = test_sample_data.cpu()
+    sample_data = TorchUtils.to_device(test_sample_data)
     if len(sample_data.shape) == 3:
         sample_data = sample_data.unsqueeze(0)  # make the single sample 4-dim tensor
 
@@ -474,7 +473,7 @@ def execute_pnml_adv_fix(pnml_params: dict, params_init_training: dict, dataload
 
         global execute_pnml_adv_fix_ind
         if execute_pnml_adv_fix_ind == 0:
-            from visual_utilities import plt_img
+            from utilities import plt_img
             plt_img(x_refine, 0)
 
 

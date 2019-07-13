@@ -7,7 +7,7 @@ import torch
 from torch.utils import data
 from torchvision import transforms, datasets
 from PIL import Image
-
+from utilities import TorchUtils
 from adversarial_utilities import create_adversarial_sign_dataset, create_adversarial_mnist_sign_dataset
 from noise_dataset_class import NoiseDataset
 
@@ -361,7 +361,7 @@ class CIFAR10AdversarialTest(datasets.CIFAR10):
         test_samples = int(self.test_data.shape[0] / 30)  # TODO: remove division by 30
         test_samples = 50 # TODO: REMOVE
         test_adv_data = torch.zeros([test_samples, 3, 32, 32])
-        from visual_utilities import plt_img
+        from utilities import plt_img
         plt_img(self.test_data, 2)
         for index in range(test_samples):
             # use the transform on all the testset
@@ -371,7 +371,7 @@ class CIFAR10AdversarialTest(datasets.CIFAR10):
         self.test_data = test_adv_data
         self.test_labels = torch.LongTensor(self.test_labels[0:test_samples])
 
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        device = TorchUtils.get_device()
         for index in range(int(test_samples / grp_size)):
             print(index)
             # save the adversarial testset
@@ -495,7 +495,7 @@ class MnistAdversarialTest(datasets.MNIST):
         grp_size = 100
         test_samples = int(self.test_data.shape[0] / 30)# TODO: remove division by 30
         test_adv_data = torch.zeros([test_samples, 1, 28, 28])
-        from visual_utilities import plt_img
+        from utilities import plt_img
         plt_img(self.test_data, 0)
         for index in range(test_samples):
             # use the transform on all the testset
@@ -503,7 +503,7 @@ class MnistAdversarialTest(datasets.MNIST):
             test_adv_data[index] = transform(img)
 
         self.test_data = test_adv_data
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        device = TorchUtils.get_device()
         for index in range(int(test_samples / grp_size)):
             print(index)
             # save the adversarial testset

@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from torch.nn import functional as F
+from utilities import TorchUtils
 
 
 class Net(nn.Module):
@@ -63,7 +64,7 @@ class Net_800_400_100(nn.Module):
 
 
 def load_pretrained_model(model_base, model_params_path):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = TorchUtils.get_device()
     state_dict = torch.load(model_params_path, map_location=device)
     model_base.load_state_dict(state_dict)
     model_base = model_base.to(device)
