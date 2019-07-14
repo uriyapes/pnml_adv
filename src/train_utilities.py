@@ -10,7 +10,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch import nn
 from adversarial.attacks import get_attack
-from dataset_utilities import insert_sample_to_dataset, mnist_min_val, mnist_max_val
+from dataset_utilities import insert_sample_to_dataset, get_dataset_min_max_val
 from utilities import TorchUtils
 
 
@@ -71,7 +71,7 @@ class TrainClass:
         self.logger.info("Use device:" + TorchUtils.get_device())
         model = TorchUtils.to_device(model)
         attack = get_attack(self.attack_type, model, self.adv_learn_eps, self.pgd_iter, self.pgd_step,
-                            self.pgd_random, (mnist_min_val, mnist_max_val))
+                            self.pgd_random, get_dataset_min_max_val(dataloaders['dataset_name']))
 
         train_loss, train_acc = torch.tensor([-1.]), torch.tensor([-1.])
         # If testset is already adversarial then do nothing else use the same attack to generate adversarial testset
@@ -86,7 +86,7 @@ class TrainClass:
                                                                       sample_test_data, sample_test_true_label)
             # Evaluate
             if self.eval_test_during_train is True and epoch % eval_test_every_n_epoch == 0:
-                test_loss, test_acc = self.eval(model, dataloaders['test'], testset_attack)
+                test_loss, test_acc = self.eval_model(model, dataloaders['test'], testset_attack)
             else:
                 test_loss, test_acc = torch.tensor([-1.]), torch.tensor([-1.])
             epoch_time = time.time() - epoch_start_time
@@ -103,7 +103,7 @@ class TrainClass:
             if acc_goal is not None and train_acc >= acc_goal:
                 break
 
-        test_loss, test_acc = self.eval(model, dataloaders['test'], testset_attack)
+        test_loss, test_acc = self.eval_model(model, dataloaders['test'], testset_attack)
         train_loss_output = float(train_loss.cpu().detach().numpy().round(16))
         test_loss_output = float(test_loss.cpu().detach().numpy().round(16))
         # Print and save
@@ -241,7 +241,7 @@ class TrainClass:
         return outputs, loss
 
     @classmethod
-    def eval(cls, model, dataloader, attack = get_attack("no_attack")):
+    def eval_model(cls, model, dataloader, attack = get_attack("no_attack")):
         """
         Evaluate the performance of the model on the train/test sets.
         :param model: the model that will be evaluated.
@@ -451,17 +451,17 @@ def execute_pnml_adv_fix(pnml_params: dict, params_init_training: dict, dataload
         trained_label_list = [sample_test_true_label.tolist()]
     else:
         trained_label_list = range(len(classes_trained))
-    model = deepcopy(model_base_input.to("cpu"))  # working on a single sample, it is reasonable to assume cpu is better
+    model = deepcopy(model_base_input)  # working on a single sample, it is reasonable to assume cpu is better
     refinement = get_attack(pnml_params['fix_type'], model, pnml_params['epsilon'], pnml_params['pgd_iter'],
-                           pnml_params['pgd_step'], pnml_params['pgd_rand_start'], (mnist_min_val, mnist_max_val),
+                           pnml_params['pgd_step'], pnml_params['pgd_rand_start'], get_dataset_min_max_val(dataloaders_input['dataset_name']),
                            pnml_params['pgd_test_restart_num'])
     for fix_to_label in trained_label_list:
         time_trained_label_start = time.time()
 
-        fix_label_expand = torch.tensor(np.expand_dims(fix_to_label, 0), dtype=torch.int64)
-        true_label_expand = torch.tensor(np.expand_dims(sample_test_true_label, 0), dtype=torch.int64)  # make the label to tensor array type (important for loss calculation)
+        fix_label_expand = TorchUtils.to_device(torch.tensor(np.expand_dims(fix_to_label, 0), dtype=torch.int64))
+        true_label_expand = TorchUtils.to_device(torch.tensor(np.expand_dims(sample_test_true_label, 0), dtype=torch.int64))  # make the label to tensor array type (important for loss calculation)
         if len(sample_test_data_trans.shape) == 3:
-            sample_test_data_trans = sample_test_data_trans.unsqueeze(0)# make the single sample 4-dim tensor
+            sample_test_data_trans = TorchUtils.to_device(sample_test_data_trans.unsqueeze(0))# make the single sample 4-dim tensor
 
         time_trained_label = time.time() - time_trained_label_start
 

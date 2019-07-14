@@ -85,6 +85,7 @@ def run_experiment(experiment_type: str, first_idx: int = None, last_idx: int = 
     elif 'initial_training' in params and params['initial_training']['do_initial_training'] is False:
         logger.info('Load pretrained model')
         model_base = load_pretrained_model(model_base, params['initial_training']['pretrained_model_path'])
+        model_base_backup = copy.deepcopy(model_base)
 
     # Create a white-box attack and use it to create the testset
     if params['adv_attack_test']['white_box'] is True:
@@ -110,9 +111,9 @@ def run_experiment(experiment_type: str, first_idx: int = None, last_idx: int = 
                              params_init_training["attack_type"], params_init_training["pgd_iter"],
                              params_init_training["pgd_step"])
     # plt_img(next(iter(dataloaders['test']))[0], 2)
-    # base_train_loss, base_train_acc = train_class.eval(model_base, dataloaders['train'])
+    # base_train_loss, base_train_acc = train_class.eval_model(model_base, dataloaders['train'])
     base_train_loss, base_train_acc = -1,-1 # TODO: REMOVE
-    base_test_loss, base_test_acc = train_class.eval(model_base, dataloaders['test'])
+    base_test_loss, base_test_acc = train_class.eval_model(model_base, dataloaders['test'])
     logger.info('Base model ----- [Natural-train test] loss =[%f %f] acc=[%f %f]' %
                 (base_train_loss, base_test_loss, base_train_acc, base_test_acc))
 

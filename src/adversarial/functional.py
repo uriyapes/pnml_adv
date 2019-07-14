@@ -71,6 +71,7 @@ def _iterative_gradient(model: Module,
     Returns:
         x_adv: Adversarially perturbed version of x
     """
+    model.eval()
     targeted = y_target is not None
     # x_adv = x.clone().detach().requires_grad_(True).to(x.device)
     x_adv = x.clone().to(x.device)

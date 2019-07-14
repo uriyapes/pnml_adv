@@ -21,7 +21,18 @@ normalize_mnist = transforms.Normalize(mean=[mean_mnist], std=[mnist_std])
 mnist_max_val = (1 - mean_mnist) / mnist_std
 mnist_min_val = (0 - mean_mnist) / mnist_std
 assert(np.isclose(1/mnist_std, mnist_max_val - mnist_min_val))
+cifar_max_val = 50
+cifar_min_val = -50
 shuffle_train_set = True
+
+
+def get_dataset_min_max_val(dataset_name: str):
+    if dataset_name == 'cifar_adversarial':
+        return cifar_min_val, cifar_max_val
+    elif dataset_name == 'mnist_adversarial':
+        return mnist_min_val, mnist_max_val
+    else:
+        raise NameError("No experiment name:" + dataset_name)
 
 
 def insert_sample_to_dataset(trainloader, sample_to_insert_data, sample_to_insert_label):

@@ -13,7 +13,7 @@ from resnet import resnet20, resnet56, resnet110, load_pretrained_resnet20_cifar
 from wide_resnet_original import WideResNet
 from models.wide_resnet import WideResNet as MadryWideResNet
 from adversarial.attacks import get_attack
-from dataset_utilities import mnist_max_val, mnist_min_val
+from dataset_utilities import get_dataset_min_max_val
 
 
 class Experiment:
@@ -66,18 +66,11 @@ class Experiment:
         :param model: the black/white-box model on which the attack will work, if None no attack will run
         :return: dataloaders dict
         """
-        if self.exp_type == 'mnist_adversarial':
-            min_val, max_val = mnist_min_val, mnist_max_val
-        elif self.exp_type == 'cifar_adversarial':
-            min_val, max_val = -5, 5
-        else:
-            raise NameError('No experiment type: %s' % self.exp_type)
-
         if model is None:
             attack = get_attack("no_attack")
         else:
             attack = get_attack(p['attack_type'], model, p['epsilon'], p['pgd_iter'], p['pgd_step'],
-                                p['pgd_rand_start'], (min_val, max_val), p['pgd_test_restart_num'])
+                                p['pgd_rand_start'], get_dataset_min_max_val(self.exp_type), p['pgd_test_restart_num'])
         return self.get_dataloaders(datafolder, attack)
 
     def get_dataloaders(self, data_folder: str = './data', attack=None):
@@ -131,12 +124,13 @@ class Experiment:
             dataloaders = {'train': trainloader,
                            'test': testloader,
                            'adv_test_flag': adv_test_flag,  # This flag indicates whether the testset is already adversarial
-                           'classes': classes}
+                           'classes': classes
+                            }
 
 
         elif self.exp_type == 'mnist_adversarial':
             assert(attack is not None)
-            dataloaders = {}
+            dataloaders = dict()
             dataloaders['train'], dataloaders['classes'] = create_mnist_train_dataloader(data_folder,
                                                                  self.params['batch_size'], self.params['num_workers'])
 
@@ -146,7 +140,7 @@ class Experiment:
         else:
             raise NameError('No experiment type: %s' % self.exp_type)
 
-
+        dataloaders['dataset_name'] = self.exp_type
         return dataloaders
 
     def get_model(self, model_arch: str = None):
