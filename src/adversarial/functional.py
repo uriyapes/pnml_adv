@@ -71,7 +71,6 @@ def _iterative_gradient(model: Module,
     Returns:
         x_adv: Adversarially perturbed version of x
     """
-    model.eval()
     targeted = y_target is not None
     # x_adv = x.clone().detach().requires_grad_(True).to(x.device)
     x_adv = x.clone().to(x.device)
@@ -81,6 +80,7 @@ def _iterative_gradient(model: Module,
         x_adv = rand_gen.sample().clamp(*clamp)
 
     for i in range(k):
+        # print("_iterative_gradient iter: {}".format(i))
         # Each new loop x_adv is a new variable (x_adv += gradients), therefore we must detach it (otherwise backward()
         # will result in calculating the old clones gradients as well) and then requires_grad_(True) since detach()
         # disabled the grad.
@@ -155,6 +155,10 @@ def iterated_fgsm(model: Module,
         x_adv: Adversarially perturbed version of x
     """
     assert((random is False and restart_num == 1) or (random is True and restart_num >= 1))
+    # is_model_training_flag = model.training
+    # model.train(False)  # The same as model.eval()
+    model.freeze_all_layers()
+
     max_loss = -1
     x_adv_l = []
     loss_l = []
@@ -171,7 +175,7 @@ def iterated_fgsm(model: Module,
         #     best_adv = x_adv
 
     if restart_num == 1:
-        return x_adv_l[0]
+        best_adv = x_adv_l[0]
     else:
         x_adv_stack = torch.stack(x_adv_l)
         loss_stack = torch.stack(loss_l)
@@ -180,7 +184,8 @@ def iterated_fgsm(model: Module,
         else:
             best_loss_ind = torch.argmin(loss_stack, dim=0).tolist()  # find the minimum loss for the specified y_target
         best_adv = x_adv_stack[best_loss_ind, range(x_adv_stack.size()[1])]  # make max_loss_ind numpy
-
+    model.unfreeze_all_layers()
+    # model.train(is_model_training_flag)
     return best_adv
 
 

@@ -10,8 +10,9 @@ from torchvision import transforms, datasets
 
 from resnet import load_pretrained_resnet32_cifar10_model
 from resnet import resnet32
-from mpl import Net, Net_800_400_100, load_pretrained_model
+from models.mpl import Net_800_400_100
 from utilities import TorchUtils
+from models.model_utils import load_pretrained_model
 
 
 # Normalization for CIFAR10 dataset

@@ -73,7 +73,6 @@ class TrainClass:
         attack = get_attack(self.attack_type, model, self.adv_learn_eps, self.pgd_iter, self.pgd_step,
                             self.pgd_random, get_dataset_min_max_val(dataloaders['dataset_name']))
 
-        train_loss, train_acc = torch.tensor([-1.]), torch.tensor([-1.])
         # If testset is already adversarial then do nothing else use the same attack to generate adversarial testset
         testset_attack = get_attack("no_attack") if dataloaders['adv_test_flag'] else attack  # TODO: replace training attack with testing attack
         epoch_time = 0
@@ -82,7 +81,7 @@ class TrainClass:
         for epoch in range(num_epochs):
 
             epoch_start_time = time.time()
-            total_loss_in_epoch, train_loss, train_acc = self.__train(model, dataloaders['train'], attack,
+            total_loss_in_epoch, natural_train_loss, train_acc = self.__train(model, dataloaders['train'], attack,
                                                                       sample_test_data, sample_test_true_label)
             # Evaluate
             if self.eval_test_during_train is True and epoch % eval_test_every_n_epoch == 0:
@@ -94,9 +93,9 @@ class TrainClass:
             for param_group in self.optimizer.param_groups:
                 lr = param_group['lr']
 
-            self.logger.info('[%d/%d] [train test] loss =[%f %f] adv_loss=[%f], acc=[%f %f], lr=%f, epoch_time=%.2f'
+            self.logger.info('[%d/%d] [train test] loss =[%f %f] natural_train_loss=[%f], acc=[%f %f], lr=%f, epoch_time=%.2f'
                              % (epoch, num_epochs - 1,
-                                train_loss, test_loss, total_loss_in_epoch, train_acc, test_acc,
+                                total_loss_in_epoch, test_loss, natural_train_loss, train_acc, test_acc,
                                 lr, epoch_time))
 
             # Stop training if desired goal is achieved
@@ -104,11 +103,11 @@ class TrainClass:
                 break
 
         test_loss, test_acc = self.eval_model(model, dataloaders['test'], testset_attack)
-        train_loss_output = float(train_loss.cpu().detach().numpy().round(16))
+        train_loss_output = float(total_loss_in_epoch.cpu().detach().numpy().round(16))
         test_loss_output = float(test_loss.cpu().detach().numpy().round(16))
         # Print and save
-        self.logger.info('----- [train test] loss =[%f %f], adv_loss=[%f], acc=[%f %f] epoch_time=%.2f' %
-                         (train_loss, test_loss, total_loss_in_epoch, train_acc, test_acc,
+        self.logger.info('----- [train test] loss =[%f %f], natural_train_loss=[%f], acc=[%f %f] epoch_time=%.2f' %
+                         (total_loss_in_epoch, test_loss, natural_train_loss, train_acc, test_acc,
                           epoch_time))
 
         return model, train_loss_output, test_loss_output
@@ -126,8 +125,12 @@ class TrainClass:
         if self.freeze_batch_norm is True: # this works during fine-tuning because it can change the model even if LR=0.
             model = model.apply(set_bn_eval) # this fucntion calls model.eval() which only effects dropout and batchnorm which will work in eval mode.
         total_loss_in_epoch = 0
-        train_loss = 0
         correct = 0
+
+        natural_loss = 0
+        natural_train_loss_in_ep = 0 if self.adv_learn_alpha != 1 else -1*len(train_loader.dataset)
+        natural_correct = 0
+
         loss_sample_test = 0
         # max_iter = np.ceil(len(train_loader.dataset) / train_loader.batch_size) #TODO: from some reason I am missing the last batch but the dataloader should not drop the last batch
         # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -146,21 +149,21 @@ class TrainClass:
             # Adjust to CUDA
             images, labels = TorchUtils.to_device(images), TorchUtils.to_device(labels)
             self.logger.debug("iter: {}, data and labels to CUDA:".format(iter_num))
-            # images = images.to(device)
-            # labels = labels.to(device)
 
-            # Forward
+            # Forward-pass of natural images
             self.optimizer.zero_grad()
-            outputs, loss = self.__forward_pass(model, images, labels)
-            _, predicted = torch.max(outputs.data, 1)
-            correct += (predicted == labels).sum().item()
-            train_loss += loss * len(images)  # loss sum for the epoch
-            self.logger.debug("iter: {}, Forward pass".format(iter_num))
+            if self.adv_learn_alpha != 1:
+                outputs, natural_loss = self.__forward_pass(model, images, labels)
+                _, predicted = torch.max(outputs.data, 1)
+                natural_correct += (predicted == labels).sum().item()
+                natural_train_loss_in_ep += natural_loss * len(images)  # natural_loss sum for the epoch
+                self.logger.debug("iter: {}, Forward pass".format(iter_num))
 
             # Back-propagation
-            if self.adv_learn_alpha is 0:
-                loss.backward()
+            if self.adv_learn_alpha == 0:
+                natural_loss.backward()
                 self.logger.debug("iter: {}, Backward pass".format(iter_num))
+                correct = natural_correct
             else:
                 # # The loss is averaged over the minibatch, this doesn't matter at all since the loss magnitude
                 # # is only just to determine gradient sign. Each pixel is changed by -+epsilon, no matter
@@ -180,16 +183,16 @@ class TrainClass:
                     # correct += (predicted == sample_test_true_label).sum().item() #TODO: when calculating accuracy (after epoch) we need to divide by +1
                     if TrainClass.criterion.reduction == 'elementwise_mean':  # Re-average the loss since another image was added
                         loss_sample_test = loss_sample_test / (len(images) + 1)
-                        # loss = loss * len(images) / (len(images) + 1) TODO: uncomment
+                        # natural_loss = natural_loss * len(images) / (len(images) + 1) TODO: uncomment
                     loss_sample_test.backward(retain_graph=True)
                     # self.optimizer.zero_grad()
                 ####
 
-                _, adv_loss = self.__forward_pass(model, adv_images, labels)
+                outputs, adv_loss = self.__forward_pass(model, adv_images, labels)
                 self.logger.debug("iter: {}, Adv. Forward pass".format(iter_num))
-                outputs = model(adv_images)
-                adv_loss = TrainClass.criterion(outputs, labels)  # Negative log-loss
-                total_loss = (1 - self.adv_learn_alpha) * loss + self.adv_learn_alpha * adv_loss #+ loss_sample_test
+                _, predicted = torch.max(outputs.data, 1)
+                correct += (predicted == labels).sum().item()
+                total_loss = (1 - self.adv_learn_alpha) * natural_loss + self.adv_learn_alpha * adv_loss #+ loss_sample_test
                 total_loss_in_epoch += total_loss * len(images)
                 total_loss.backward()
                 self.logger.debug("iter: {}, Adv. Backward pass".format(iter_num))
@@ -197,42 +200,10 @@ class TrainClass:
             self.optimizer.step()
             self.logger.debug("iter: {}, Optimizer step".format(iter_num))
         self.scheduler.step()
-        train_loss /= len(train_loader.dataset)
+        natural_train_loss_in_ep /= len(train_loader.dataset)
         total_loss_in_epoch /= len(train_loader.dataset)
         train_acc = correct / len(train_loader.dataset)
-        return total_loss_in_epoch, train_loss, train_acc
-
-
-#     ###################
-#     def train_del(self, model, tr_loader, va_loader=None, adv_train=False):
-#         logger = self.logger
-#
-#         opt = torch.optim.Adam(model.parameters(), 0.01, weight_decay=0.0002)
-#         scheduler = torch.optim.lr_scheduler.MultiStepLR(opt,
-#                                                          milestones=[100, 150],
-#                                                          gamma=0.1)
-#         _iter = 0
-#
-#         logger.init_debug_time_measure()
-#         for epoch in range(1, 200):
-#             scheduler.step()
-#             for data, label in tr_loader:
-#                 logger.debug("iter: {}, load data".format(_iter))
-#                 data, label = tensor_to_cuda(data), tensor_to_cuda(label)
-#                 logger.debug("iter: {}, data to CUDA".format(_iter))
-#                 output = model(data, _eval=False)
-#                 loss = F.cross_entropy(output, label)
-#                 opt.zero_grad()
-#                 loss.backward()
-#                 opt.step()
-#                 logger.debug("iter: {}, Forward/Backward pass".format(_iter))
-#
-#
-#
-#
-#                 _iter += 1
-#
-# ######################## DELETE UNTILL HERE
+        return total_loss_in_epoch, natural_train_loss_in_ep, train_acc
 
     @classmethod
     def __forward_pass(cls, model, images, labels):
@@ -252,7 +223,7 @@ class TrainClass:
         loss = 0
         correct = 0
         for iter_num, (data, labels) in enumerate(dataloader):
-            print("iter_num: {}".format(iter_num))
+            # print("iter_num: {}".format(iter_num))
             data, labels = TorchUtils.to_device(data), TorchUtils.to_device(labels)
             adv_data = attack.create_adversarial_sample(data, labels)
             with torch.no_grad():

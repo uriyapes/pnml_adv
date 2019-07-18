@@ -1,10 +1,9 @@
-import torch
 import torch.nn as nn
 from torch.nn import functional as F
-from utilities import TorchUtils
+from .model_utils import ModelTemplate
 
 
-class Net(nn.Module):
+class Net(ModelTemplate):
     def __init__(self, input_size=28, hidden_size=10, num_classes=10):
         super(Net, self).__init__()
         self.input_size = input_size
@@ -20,7 +19,7 @@ class Net(nn.Module):
         return out
 
 
-class MNISTClassifier(nn.Module):
+class MNISTClassifier(ModelTemplate):
     def __init__(self):
         super(MNISTClassifier, self).__init__()
         self.conv1 = nn.Conv2d(1, 32, kernel_size=5)
@@ -35,7 +34,7 @@ class MNISTClassifier(nn.Module):
         return F.log_softmax(x, dim=1)
 
 
-class Net_800_400_100(nn.Module):
+class Net_800_400_100(ModelTemplate):
     def __init__(self, input_size=28, hidden_size1=800, hidden_size2=400, hidden_size3=100, num_classes=10):
         super(Net_800_400_100, self).__init__()
         self.input_size = input_size
@@ -62,10 +61,3 @@ class Net_800_400_100(nn.Module):
         out = self.fc4(out)
         return out
 
-
-def load_pretrained_model(model_base, model_params_path):
-    device = TorchUtils.get_device()
-    state_dict = torch.load(model_params_path, map_location=device)
-    model_base.load_state_dict(state_dict)
-    model_base = model_base.to(device)
-    return model_base

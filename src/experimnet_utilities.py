@@ -1,5 +1,3 @@
-import os
-
 from dataset_utilities import create_mnist_train_dataloader, create_adv_mnist_test_dataloader_preprocessed
 from dataset_utilities import create_adversarial_cifar10_dataloaders
 from dataset_utilities import create_cifar10_dataloaders
@@ -7,9 +5,8 @@ from dataset_utilities import create_cifar10_random_label_dataloaders
 from dataset_utilities import create_mnist_dataloaders
 from dataset_utilities import create_svhn_dataloaders
 from dataset_utilities import dataloaders_noise
-from adversarial_utilities import create_adversarial_mnist_sign_dataset
-from mpl import Net, Net_800_400_100, MNISTClassifier, load_pretrained_model
-from resnet import resnet20, resnet56, resnet110, load_pretrained_resnet20_cifar10_model
+from models.mpl import Net, Net_800_400_100, MNISTClassifier
+from resnet import resnet20, load_pretrained_resnet20_cifar10_model
 from wide_resnet_original import WideResNet
 from models.wide_resnet import WideResNet as MadryWideResNet
 from adversarial.attacks import get_attack

@@ -7,8 +7,8 @@ import argparse
 import torch
 torch.manual_seed(1)
 import numpy as np
-# torch.backends.cudnn.deterministic = True
-torch.backends.cudnn.benchmark = True
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
 np.random.seed(0)
 
 
@@ -16,7 +16,7 @@ from experimnet_utilities import Experiment
 from logger_utilities import Logger
 from train_utilities import TrainClass, eval_single_sample, execute_pnml_training, execute_pnml_adv_fix
 from train_utilities import freeze_model_layers
-from mpl import load_pretrained_model
+from models.model_utils import load_pretrained_model
 from utilities import plt_img, TorchUtils
 TorchUtils.set_device(None)  # 'cuda' or 'cpu' or None
 

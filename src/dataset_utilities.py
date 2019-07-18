@@ -21,8 +21,8 @@ normalize_mnist = transforms.Normalize(mean=[mean_mnist], std=[mnist_std])
 mnist_max_val = (1 - mean_mnist) / mnist_std
 mnist_min_val = (0 - mean_mnist) / mnist_std
 assert(np.isclose(1/mnist_std, mnist_max_val - mnist_min_val))
-cifar_max_val = 50
-cifar_min_val = -50
+cifar_max_val = 0
+cifar_min_val = 1
 shuffle_train_set = True
 
 
@@ -432,9 +432,9 @@ def create_adversarial_cifar10_dataloaders(attack, data_dir: str = './data', bat
             transforms.ToPILImage(),
             transforms.RandomCrop(32),
             transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(), transfrom_per_img_per_ch_norm()# TODO: integrate normalization inside the model to be as per_image_standardization (https://github.com/tensorflow/tensorflow/blob/r1.14/tensorflow/python/ops/image_ops_impl.py)
+            transforms.ToTensor()
         ])
-        cifar_transform_test = transforms.Compose([transforms.ToTensor(), transfrom_per_img_per_ch_norm()])
+        cifar_transform_test = transforms.Compose([transforms.ToTensor()])
     else:
         cifar_transform_train = transforms.Compose([transforms.ToTensor(), normalize])
         cifar_transform_test = transforms.Compose([transforms.ToTensor(), normalize])

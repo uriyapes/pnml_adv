@@ -5,6 +5,7 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from .model_utils import ModelTemplate
 
 
 class BasicBlock(nn.Module):
@@ -68,13 +69,14 @@ class NetworkBlock(nn.Module):
         return self.layer(x)
 
 
-class WideResNet(nn.Module):
+class WideResNet(ModelTemplate):
     def __init__(self, depth, num_classes, widen_factor=1, dropRate=0.0):
         super(WideResNet, self).__init__()
         nChannels = [16, 16 * widen_factor, 32 * widen_factor, 64 * widen_factor]
         assert ((depth - 4) % 6 == 0)
         n = (depth - 4) // 6
         block = BasicBlock
+
         # 1st conv before any network block
         self.conv1 = nn.Conv2d(3, nChannels[0], kernel_size=3, stride=1,
                                padding=1, bias=False)
@@ -101,6 +103,7 @@ class WideResNet(nn.Module):
                 m.bias.data.zero_()
 
     def forward(self, x):
+        x = per_image_standardization_tf(x)
         out = self.conv1(x)
         out = self.block1(out)
         out = self.block2(out)
@@ -110,6 +113,33 @@ class WideResNet(nn.Module):
         out = out.view(-1, self.nChannels)
 
         return self.fc(out)
+
+
+def per_image_standardization_tf(x: torch.Tensor):
+    """Linearly scales `image` to have zero mean and unit variance.
+    This op computes `(x - mean) / adjusted_stddev`, where `mean` is the average
+    of all values in image, and `adjusted_stddev = max(stddev, 1.0/sqrt(image.NumElements()))`. Where NumElements
+    include the pixels in all channels combined.
+    `stddev` is the standard deviation of all values in `image`. It is capped
+    away from zero to protect against division by 0 when handling uniform images.
+    Args:
+      x: An N-D Tensor where the first dimension is the batch dimension and the others are [Channels, Height, Width]
+    Returns:
+      The standardized image with same shape as `image`.
+    """
+    dim = x.dim()
+    assert(dim == 4)  # Untested with different number of channels but could work
+    assert(x.size()[1] == 3) # make sure first dim is channels RGB
+    pix_num = torch.prod(torch.tensor(x.shape)[-dim+1:], dtype=torch.float).to(x.device)
+    min_stddev = 1 / torch.sqrt(pix_num)
+    std = x
+    mean = x
+    # Calculates std and mean over each image in the batch. In pytorch > 0.4.1 could be done without for loop
+    for dim_to_reduce in range(1, dim):
+        std = torch.std(std, dim_to_reduce, keepdim=True)
+        mean = torch.mean(mean, dim_to_reduce, keepdim=True)
+    adjusted_stddev = torch.max(std, min_stddev)
+    return (x - mean) / adjusted_stddev
 
 
 if __name__ == '__main__':

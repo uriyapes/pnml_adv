@@ -17,7 +17,7 @@ class Logger:
 
         # Create logger
         logger = logging.getLogger()
-        logger.setLevel(logging.INFO)
+        logger.setLevel(logging.DEBUG)
 
         ch = logging.StreamHandler(sys.stdout)
         ch.setLevel(logging.DEBUG)
@@ -65,7 +65,7 @@ class Logger:
         """
         if self.time is not None and measure_time is True:
             new_time = time.time()
-            string_to_print = string_to_print + ", time from last debug msg: {}".format(new_time - self.time)
+            string_to_print = string_to_print + ", time: {}".format(new_time - self.time)
             self.time = new_time
         self.logger.debug(string_to_print)
 
