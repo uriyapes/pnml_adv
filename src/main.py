@@ -7,8 +7,8 @@ import argparse
 import torch
 torch.manual_seed(1)
 import numpy as np
-torch.backends.cudnn.deterministic = True
-torch.backends.cudnn.benchmark = False
+# torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = True
 np.random.seed(0)
 
 

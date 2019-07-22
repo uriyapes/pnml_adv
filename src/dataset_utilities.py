@@ -18,11 +18,13 @@ normalize = transforms.Normalize(mean=mean_cifar10, std=std_cifar10)
 mnist_std = 0.3081
 mean_mnist = 0.1307
 normalize_mnist = transforms.Normalize(mean=[mean_mnist], std=[mnist_std])
-mnist_max_val = (1 - mean_mnist) / mnist_std
 mnist_min_val = (0 - mean_mnist) / mnist_std
+mnist_max_val = (1 - mean_mnist) / mnist_std
+assert(mnist_max_val > mnist_min_val)
 assert(np.isclose(1/mnist_std, mnist_max_val - mnist_min_val))
-cifar_max_val = 0
-cifar_min_val = 1
+cifar_min_val = 0
+cifar_max_val = 1
+assert(cifar_max_val > cifar_min_val)
 shuffle_train_set = True
 
 
@@ -368,9 +370,9 @@ class CIFAR10AdversarialTest(datasets.CIFAR10):
         """
         super(CIFAR10AdversarialTest, self).__init__(**kwargs)
         assert(self.train is False)
-        grp_size = 50
+        grp_size = 100
         test_samples = int(self.test_data.shape[0] / 30)  # TODO: remove division by 30
-        test_samples = 50 # TODO: REMOVE
+        test_samples = 500 # TODO: REMOVE
         test_adv_data = torch.zeros([test_samples, 3, 32, 32])
         from utilities import plt_img
         plt_img(self.test_data, 2)
