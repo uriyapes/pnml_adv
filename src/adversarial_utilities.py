@@ -8,8 +8,8 @@ import torch.nn as nn
 from torch.utils import data
 from torchvision import transforms, datasets
 
-from resnet import load_pretrained_resnet32_cifar10_model
-from resnet import resnet32
+from models.resnet import load_pretrained_resnet32_cifar10_model
+from models.resnet import resnet32
 from models.mpl import Net_800_400_100
 from utilities import TorchUtils
 from models.model_utils import load_pretrained_model

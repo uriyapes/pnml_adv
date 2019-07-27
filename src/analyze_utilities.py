@@ -133,7 +133,10 @@ def calc_statistic_from_df_single(result_df):
 
 def result_dict_to_nml_df(results_dict, is_random_labels=False, is_out_of_dist=False):
     # Initialize col of df
-    df_col = [str(x) for x in range(10)] + ['true_label', 'loss', 'log10_norm_factor', 'entropy']
+    cls_keys = list(filter(lambda l: l.isdigit(), list(results_dict['0'].keys())))  # extract only the digits keys
+    cls_keys = [int(k) for k in cls_keys]
+    df_col = [str(x) for x in range(min(cls_keys), max(cls_keys)+1)] + \
+             ['true_label', 'loss', 'log10_norm_factor', 'entropy']
     nml_dict = {}
     for col in df_col:
         nml_dict[col] = []
@@ -166,7 +169,9 @@ def result_dict_to_nml_df(results_dict, is_random_labels=False, is_out_of_dist=F
 
 def result_dict_to_erm_df(results_dict, is_random_labels=False, is_out_of_dist=False):
     # Initialize columns to df
-    df_col = [str(x) for x in range(10)] + ['true_label', 'loss', 'entropy']
+    cls_keys = list(filter(lambda l: l.isdigit(), list(results_dict['0'].keys())))  # extract only the digits keys
+    cls_keys = [int(k) for k in cls_keys]
+    df_col = [str(x) for x in range(min(cls_keys), max(cls_keys)+1)] + ['true_label', 'loss', 'entropy']
     erm_dict = {}
     for col in df_col:
         erm_dict[col] = []
@@ -198,7 +203,9 @@ def result_dict_to_erm_df(results_dict, is_random_labels=False, is_out_of_dist=F
 
 def result_dict_to_genie_df(results_dict, is_random_labels=False):
     # Initialize columns to df
-    df_col = [str(x) for x in range(10)] + ['true_label', 'loss', 'entropy']
+    cls_keys = list(filter(lambda l: l.isdigit(), list(results_dict['0'].keys())))  # extract only the digits keys
+    cls_keys = [int(k) for k in cls_keys]
+    df_col = [str(x) for x in range(min(cls_keys), max(cls_keys)+1)] + ['true_label', 'loss', 'entropy']
     genie_dict = {}
     for col in df_col:
         genie_dict[col] = []
@@ -411,13 +418,17 @@ def find_results_in_path(path_to_folder:str):
 
 if __name__ == "__main__":
     # # Example
-    # json_file_name = os.path.join('.', 'results_example.json')
+    # json_file_name = 'results_example.json'
+    json_file_name = './../output/imagenet_adversarial_results_20190725_172246/results_imagenet_adversarial_20190725_172246.json'
+    json_file_name = os.path.join('.', json_file_name)
     # with open(json_file_name) as data_file:
     #     results_dict_sample = json.load(data_file)
     # nml_df_sample = result_dict_to_nml_df(results_dict_sample)
     #
     # tic = time.time()
-    # result_df_sample, statistics_df_sample = load_results_to_df([json_file_name])
+    result_df_sample, statistics_df_sample = load_results_to_df([json_file_name])
+    print(statistics_df_sample.transpose())
+    print("number of test samples:{}".format(result_df_sample.shape[0]))
     # print('load_results_to_df: {0:.2f} [s]'.format(time.time() - tic))
     # tic = time.time()
     # nml_df = result_dict_to_nml_df(results_dict_sample)

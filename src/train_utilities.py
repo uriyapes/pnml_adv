@@ -1,4 +1,4 @@
-import copy
+import os
 import logging
 import sys
 import time
@@ -21,7 +21,7 @@ class TrainClass:
     criterion = nn.CrossEntropyLoss()
     def __init__(self, params_to_train, learning_rate: float, momentum: float, step_size: list, gamma: float,
                  weight_decay: float, logger=None, adv_learn_alpha=0, adv_learn_eps=0.05, attack_type: str = 'pgd',
-                 pgd_iter: int = 30, pgd_step: float = 0.01, pgd_random: bool = True):
+                 pgd_iter: int = 30, pgd_step: float = 0.01, pgd_random: bool = True, save_model_every_n_epoch = float('Inf')):
         """
         Initialize train class object.
         :param params_to_train: the parameters of pytorch Module that will be trained.
@@ -39,6 +39,7 @@ class TrainClass:
         self.eval_test_during_train = True
         self.eval_test_in_end = True
         self.print_during_train = True
+        self.save_model_every_n_epoch = save_model_every_n_epoch
 
         # Optimizer
         self.optimizer = optim.SGD(params_to_train,
@@ -78,23 +79,26 @@ class TrainClass:
         epoch_time = 0
 
         # Loop on epochs
-        for epoch in range(num_epochs):
+        for epoch in range(1,num_epochs+1):
 
             epoch_start_time = time.time()
             total_loss_in_epoch, natural_train_loss, train_acc = self.__train(model, dataloaders['train'], attack,
                                                                       sample_test_data, sample_test_true_label)
-            # Evaluate
+            # Evaluate testset
             if self.eval_test_during_train is True and epoch % eval_test_every_n_epoch == 0:
                 test_loss, test_acc = self.eval_model(model, dataloaders['test'], testset_attack)
             else:
                 test_loss, test_acc = torch.tensor([-1.]), torch.tensor([-1.])
             epoch_time = time.time() - epoch_start_time
 
+            # Save model
+            if epoch % self.save_model_every_n_epoch == 0:
+                torch.save(model.state_dict(), os.path.join(self.logger.output_folder, 'model_iter_%d.pt' % epoch))
+            # Log
             for param_group in self.optimizer.param_groups:
                 lr = param_group['lr']
-
             self.logger.info('[%d/%d] [train test] loss =[%f %f] natural_train_loss=[%f], acc=[%f %f], lr=%f, epoch_time=%.2f'
-                             % (epoch, num_epochs - 1,
+                             % (epoch, num_epochs,
                                 total_loss_in_epoch, test_loss, natural_train_loss, train_acc, test_acc,
                                 lr, epoch_time))
 
@@ -223,7 +227,7 @@ class TrainClass:
         loss = 0
         correct = 0
         for iter_num, (data, labels) in enumerate(dataloader):
-            # print("iter_num: {}".format(iter_num))
+            print("iter_num: {}".format(iter_num))
             data, labels = TorchUtils.to_device(data), TorchUtils.to_device(labels)
             adv_data = attack.create_adversarial_sample(data, labels)
             with torch.no_grad():
@@ -445,7 +449,7 @@ def execute_pnml_adv_fix(pnml_params: dict, params_init_training: dict, dataload
         global execute_pnml_adv_fix_ind
         if execute_pnml_adv_fix_ind == 0:
             from utilities import plt_img
-            plt_img(x_refine, 0)
+            # plt_img(x_refine, 0)
 
 
         # Save to file

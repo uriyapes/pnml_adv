@@ -17,7 +17,7 @@ class Logger:
 
         # Create logger
         logger = logging.getLogger()
-        logger.setLevel(logging.DEBUG)
+        logger.setLevel(logging.INFO)
 
         ch = logging.StreamHandler(sys.stdout)
         ch.setLevel(logging.DEBUG)

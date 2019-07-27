@@ -14,7 +14,7 @@ from noise_dataset_class import NoiseDataset
 # Normalization for CIFAR10 dataset
 mean_cifar10 = [0.485, 0.456, 0.406]
 std_cifar10 = [0.229, 0.224, 0.225]
-normalize = transforms.Normalize(mean=mean_cifar10, std=std_cifar10)
+normalize_cifar = transforms.Normalize(mean=mean_cifar10, std=std_cifar10)
 mnist_std = 0.3081
 mean_mnist = 0.1307
 normalize_mnist = transforms.Normalize(mean=[mean_mnist], std=[mnist_std])
@@ -25,6 +25,9 @@ assert(np.isclose(1/mnist_std, mnist_max_val - mnist_min_val))
 cifar_min_val = 0
 cifar_max_val = 1
 assert(cifar_max_val > cifar_min_val)
+imagenet_min_val = 0
+imagenet_max_val = 1
+
 shuffle_train_set = True
 
 
@@ -32,6 +35,8 @@ def get_dataset_min_max_val(dataset_name: str):
     if dataset_name == 'cifar_adversarial':
         return cifar_min_val, cifar_max_val
     elif dataset_name == 'mnist_adversarial':
+        return mnist_min_val, mnist_max_val
+    elif dataset_name == 'imagenet_adversarial':
         return mnist_min_val, mnist_max_val
     else:
         raise NameError("No experiment name:" + dataset_name)
@@ -85,7 +90,7 @@ def create_svhn_dataloaders(data_dir: str = './data', batch_size: int = 128, num
                                 train=True,
                                 download=True,
                                 transform=transforms.Compose([transforms.ToTensor(),
-                                                              normalize]))
+                                                              normalize_cifar]))
     trainloader = data.DataLoader(trainset,
                                   batch_size=batch_size,
                                   shuffle=False,
@@ -96,7 +101,7 @@ def create_svhn_dataloaders(data_dir: str = './data', batch_size: int = 128, num
                             split='test',
                             download=True,
                             transform=transforms.Compose([transforms.ToTensor(),
-                                                          normalize]))
+                                                          normalize_cifar]))
 
     # Align as CIFAR10 dataset
     testset.test_data = testset.data
@@ -151,8 +156,8 @@ def create_cifar10_dataloaders(data_dir: str = './data', batch_size: int = 128, 
         ])
         cifar_transform_test = transforms.Compose([transforms.ToTensor(), transfrom_per_img_per_ch_norm()])
     else:
-        cifar_transform_train = transforms.Compose([transforms.ToTensor(), normalize])
-        cifar_transform_test = transforms.Compose([transforms.ToTensor(), normalize])
+        cifar_transform_train = transforms.Compose([transforms.ToTensor(), normalize_cifar])
+        cifar_transform_test = transforms.Compose([transforms.ToTensor(), normalize_cifar])
     trainset = datasets.CIFAR10(root=data_dir,
                                 train=True,
                                 download=True,
@@ -189,7 +194,7 @@ def create_cifar100_dataloaders(data_dir: str = './data', batch_size: int = 128,
                                  train=True,
                                  download=True,
                                  transform=transforms.Compose([transforms.ToTensor(),
-                                                               normalize]))
+                                                               normalize_cifar]))
     trainloader = data.DataLoader(trainset,
                                   batch_size=batch_size,
                                   shuffle=False,
@@ -199,7 +204,7 @@ def create_cifar100_dataloaders(data_dir: str = './data', batch_size: int = 128,
                                 train=False,
                                 download=True,
                                 transform=transforms.Compose([transforms.ToTensor(),
-                                                              normalize]))
+                                                              normalize_cifar]))
     testloader = data.DataLoader(testset,
                                  batch_size=batch_size,
                                  shuffle=False,
@@ -280,7 +285,7 @@ def create_cifar10_random_label_dataloaders(data_dir: str = './data', batch_size
                                    train=True,
                                    download=True,
                                    transform=transforms.Compose([transforms.ToTensor(),
-                                                                 normalize]),
+                                                                 normalize_cifar]),
                                    corrupt_prob=label_corrupt_prob)
     trainloader = data.DataLoader(trainset,
                                   batch_size=batch_size,
@@ -292,7 +297,7 @@ def create_cifar10_random_label_dataloaders(data_dir: str = './data', batch_size
                                train=False,
                                download=True,
                                transform=transforms.Compose([transforms.ToTensor(),
-                                                             normalize]))
+                                                             normalize_cifar]))
     testloader = data.DataLoader(testset,
                                  batch_size=batch_size,
                                  shuffle=False,
@@ -314,7 +319,7 @@ def dataloaders_noise(data_dir: str = './data', batch_size: int = 128, num_worke
                                 train=True,
                                 download=True,
                                 transform=transforms.Compose([transforms.ToTensor(),
-                                                              normalize]))
+                                                              normalize_cifar]))
     trainloader = data.DataLoader(trainset,
                                   batch_size=batch_size,
                                   shuffle=False,
@@ -322,7 +327,7 @@ def dataloaders_noise(data_dir: str = './data', batch_size: int = 128, num_worke
 
     testset = NoiseDataset(root=data_dir,
                            transform=transforms.Compose([transforms.ToTensor(),
-                                                         normalize]))
+                                                         normalize_cifar]))
     testloader = data.DataLoader(testset,
                                  batch_size=batch_size,
                                  shuffle=False,
@@ -335,6 +340,28 @@ def dataloaders_noise(data_dir: str = './data', batch_size: int = 128, num_worke
                    'classes_noise': ('Noise',) * 10}
     return dataloaders
 
+
+def create_imagenet_test_loader(data_dir: str = './data', batch_size: int = 128, num_workers: int = 4):
+    # normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
+    #                                  std=[0.229, 0.224, 0.225])
+    imagenet_transform = transforms.Compose([
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            # normalize,
+        ])
+    data_dir = data_dir + '/imagenet/test'
+    testset = datasets.ImageNet(root=data_dir,
+                                 split='val',
+                                 download=True,
+                                 transform=imagenet_transform)
+    testloader = data.DataLoader(testset,
+                                 batch_size=batch_size,
+                                 shuffle=False,
+                                 num_workers=num_workers)
+
+    classes = [str(i) for i in range(1000)]
+    return testloader, classes
 
 class CIFAR10Adversarial(datasets.CIFAR10):
     """
@@ -438,8 +465,8 @@ def create_adversarial_cifar10_dataloaders(attack, data_dir: str = './data', bat
         ])
         cifar_transform_test = transforms.Compose([transforms.ToTensor()])
     else:
-        cifar_transform_train = transforms.Compose([transforms.ToTensor(), normalize])
-        cifar_transform_test = transforms.Compose([transforms.ToTensor(), normalize])
+        cifar_transform_train = transforms.Compose([transforms.ToTensor(), normalize_cifar])
+        cifar_transform_test = transforms.Compose([transforms.ToTensor(), normalize_cifar])
     trainset = datasets.CIFAR10(root=data_dir,
                                 train=True,
                                 download=True,
@@ -543,58 +570,6 @@ class MnistAdversarialTest(datasets.MNIST):
             target = self.target_transform(target)
         img = self.test_data[index]
         return img, target
-
-
-
-
-
-# def create_adversarial_mnist_dataloaders(data_dir: str = './data', load_sign_dataset:bool = False,
-#                                          adversarial_sign_dataset_path: str =  os.path.join('data', 'mnist_adversarial_sign_batch'),
-#                                             create_sign_dataset_model_path: str = "./models/deep_mnist_adversarial_model_lr_0.001_40ep.pt",
-#                                            epsilon: float = 0.3, batch_size: int = 128, num_workers: int = 4):
-#     """
-#     create train and test pytorch dataloaders for MNIST dataset
-#     :param data_dir: the folder that will contain the data
-#     :param load_sign_dataset: whether to load or to calculate adversarial sign dataset
-#     :param adversarial_sign_dataset_path: the output dir to which the gradient adversarial sign will be saved.
-#     :param create_sign_dataset_model_path: If load_sign_dataset is false use this path to model to create new adversarial sign dataset.
-#     :param epsilon: the additive gradient strength to be added to the image.
-#     :param batch_size: the size of the batch for test and train loaders
-#     :param num_workers: number of cpu workers which loads the GPU with the dataset
-#     :return: train and test loaders along with mapping between labels and class names
-#     """
-#     print("create_adversarial_mnist_dataloaders...")
-#     # Normalization for MNIST dataset
-#     create_adversarial_mnist_sign_dataset(data_dir, load_sign_dataset, adversarial_sign_dataset_path, create_sign_dataset_model_path, normalize_mnist)
-#
-#     trainset = datasets.MNIST(root=data_dir,
-#                               train=True,
-#                               download=True,
-#                               transform=transforms.Compose([transforms.ToTensor(),
-#                                                             normalize_mnist]))
-#     trainloader = data.DataLoader(trainset,
-#                                   batch_size=batch_size,
-#                                   shuffle=shuffle_train_set,
-#                                   num_workers=num_workers,
-#                                   pin_memory=True)
-#
-#     testset = MnistAdversarial(root=data_dir,
-#                                  train=False,
-#                                  download=True,
-#                                  transform=transforms.Compose([transforms.ToTensor(),
-#                                                                normalize_mnist]),
-#                                  adversarial_sign_dataset_path=adversarial_sign_dataset_path,
-#                                  epsilon=epsilon)
-#
-#     testloader = data.DataLoader(testset,
-#                                  batch_size=batch_size,
-#                                  shuffle=False,
-#                                  num_workers=num_workers,
-#                                  pin_memory=True)
-#
-#     classes = ('0', '1', '2', '3', '4', '5', '6', '7', '8', '9')
-#
-#     return trainloader, testloader, classes
 
 
 def create_adv_mnist_test_dataloader_preprocessed(attack, data_dir: str = './data', batch_size: int = 128, num_workers: int = 4):
