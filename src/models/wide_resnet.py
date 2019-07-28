@@ -134,10 +134,11 @@ def per_image_standardization_tf(x: torch.Tensor):
     min_stddev = 1 / torch.sqrt(pix_num)
     std = x
     mean = x
-    # Calculates std and mean over each image in the batch. In pytorch > 0.4.1 could be done without for loop
+    # Calculates mean over each image in the batch. In pytorch > 0.4.1 could be done without for loop
     for dim_to_reduce in range(1, dim):
-        std = torch.std(std, dim_to_reduce, keepdim=True)
+        # std = torch.std(std, dim_to_reduce, keepdim=True)
         mean = torch.mean(mean, dim_to_reduce, keepdim=True)
+    std = torch.sqrt((1/pix_num) * torch.sum(x**2, dim=(1, 2, 3), keepdim=True) - (mean**2))
     adjusted_stddev = torch.max(std, min_stddev)
     return (x - mean) / adjusted_stddev
 
