@@ -74,6 +74,7 @@ def load_pretrained_imagenet_model(model_name):
     return TorchUtils.to_device(model_with_norm)
 
 
+
 def per_image_standardization_tf(x: torch.Tensor):
     """Linearly scales `image` to have zero mean and unit variance.
     This op computes `(x - mean) / adjusted_stddev`, where `mean` is the average
@@ -91,12 +92,11 @@ def per_image_standardization_tf(x: torch.Tensor):
     assert(x.size()[1] == 3) # make sure first dim is channels RGB
     pix_num = torch.prod(torch.tensor(x.shape)[-dim+1:], dtype=torch.float).to(x.device)
     min_stddev = 1 / torch.sqrt(pix_num)
-    std = x
     mean = x
-    # Calculates std and mean over each image in the batch. In pytorch > 0.4.1 could be done without for loop
+    # Calculates mean over each image in the batch. In pytorch > 0.4.1 could be done without for loop
     for dim_to_reduce in range(1, dim):
-        std = torch.std(std, dim_to_reduce, keepdim=True)
         mean = torch.mean(mean, dim_to_reduce, keepdim=True)
+    std = torch.sqrt((1/pix_num) * torch.sum(x**2, dim=(1, 2, 3), keepdim=True) - (mean**2))
     adjusted_stddev = torch.max(std, min_stddev)
     return (x - mean) / adjusted_stddev
 

@@ -84,7 +84,7 @@
             "pgd_test_restart_num": 1
         },
         "initial_training": {
-            "_comment": "===== CIFAR ADV. TRAINING =====",
+            "_comment": "===== IMAGE-NET ADV. TRAINING =====",
             "do_initial_training": false,
             "model_arch": "squeezenet1_0",
             "pretrained_model_path": 0
@@ -121,16 +121,16 @@
             "epsilon": 0.0313,
             "pgd_iter": 20,
             "pgd_step": 0.0078,
-            "pgd_rand_start": false,
+            "pgd_rand_start": true,
             "pgd_test_restart_num": 1
         },
         "initial_training": {
             "_comment": "===== CIFAR ADV. TRAINING =====",
-            "do_initial_training": false,
+            "do_initial_training": true,
             "eval_test_every_n_epoch": 1,
             "save_model_every_n_epoch": 3,
             "model_arch": "wide_resnet",
-            "pretrained_model_path": "./trained_models/wide_resnet/pgd_train/cifar_adversarial_results_20190718_164103/cifar_adversarial_model_0.135811.pt",
+            "pretrained_model_path": "./output/cifar_adversarial_results_20190728_165449/cifar_adversarial_model_0.065081.pt",
             "epochs": 204,
             "lr": 0.01,
             "momentum": 0.9,

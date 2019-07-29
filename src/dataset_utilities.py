@@ -473,7 +473,7 @@ def create_adversarial_cifar10_dataloaders(attack, data_dir: str = './data', bat
                                 transform=cifar_transform_train)
     trainloader = data.DataLoader(trainset,
                                   batch_size=batch_size,
-                                  shuffle=False,
+                                  shuffle=shuffle_train_set,
                                   num_workers=num_workers)
 
     testset = CIFAR10AdversarialTest(root=data_dir,

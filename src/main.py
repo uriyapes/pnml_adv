@@ -20,7 +20,7 @@ from models.model_utils import load_pretrained_model
 from utilities import plt_img, TorchUtils
 from analyze_utilities import load_results_to_df
 TorchUtils.set_device(None)  # 'cuda' or 'cpu' or None
-
+# torch.set_anomaly_enabled(True)
 """
 Example of running:
 CUDA_VISIBLE_DEVICES=0 python src/main.py -t pnml_cifar10
@@ -76,7 +76,8 @@ def run_experiment(experiment_type: str, first_idx: int = None, last_idx: int = 
                                  logger,
                                  params_init_training["adv_alpha"], params_init_training["epsilon"],
                                  params_init_training["attack_type"], params_init_training["pgd_iter"],
-                                 params_init_training["pgd_step"], params_init_training["save_model_every_n_epoch"])
+                                 params_init_training["pgd_step"], params_init_training["pgd_rand_start"],
+                                 params_init_training["save_model_every_n_epoch"]) # TODO: not all experiments contain adversarial parameters, fix this
         train_class.eval_test_during_train = True if params_init_training['eval_test_every_n_epoch'] is not None else False
         train_class.freeze_batch_norm = False
         acc_goal = params_init_training['acc_goal'] if 'acc_goal' in params_init_training else None
@@ -123,7 +124,7 @@ def run_experiment(experiment_type: str, first_idx: int = None, last_idx: int = 
                                  logger,
                                  params_init_training["adv_alpha"], params_init_training["epsilon"],
                                  params_init_training["attack_type"], params_init_training["pgd_iter"],
-                                 params_init_training["pgd_step"])
+                                 params_init_training["pgd_step"], params_init_training["pgd_rand_start"])
         logger.info('Train ERM model')
         train_class.eval_test_during_train = True
         model_erm, train_loss, test_loss = train_class.train_model(model_erm, dataloaders,

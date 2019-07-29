@@ -71,6 +71,7 @@ class Experiment:
         if model is None or p['attack_type'] == "no_attack":
             attack = get_attack("no_attack")
         else:
+            model.eval()
             attack = get_attack(p['attack_type'], model, p['epsilon'], p['pgd_iter'], p['pgd_step'],
                                 p['pgd_rand_start'], get_dataset_min_max_val(self.exp_type), p['pgd_test_restart_num'])
         return self.get_dataloaders(datafolder, attack)
