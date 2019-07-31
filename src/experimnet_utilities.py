@@ -54,8 +54,8 @@ class Experiment:
 
         if self.first_idx is not None and self.last_idx is not None:
             # Overwrite params
-            self.params['test_start_idx'] = self.first_idx
-            self.params['test_end_idx'] = self.last_idx
+            self.params['adv_attack_test']['test_start_idx'] = self.first_idx
+            self.params['adv_attack_test']['test_end_idx'] = self.last_idx
 
         self.executed_get_params = True
         return self.params
@@ -64,7 +64,7 @@ class Experiment:
         """
         :param experiment_h: experiment class instance
         :param datafolder: location of the data
-        :param p: the adversarial attack parameters
+        :param p: (dict) the adversarial attack parameters
         :param model: the black/white-box model on which the attack will work, if None no attack will run
         :return: dataloaders dict
         """
@@ -128,7 +128,9 @@ class Experiment:
         elif self.exp_type == 'cifar_adversarial':
             assert(attack is not None)
             trainloader, testloader, classes = create_adversarial_cifar10_dataloaders(attack, data_folder,
-                                                                  self.params['batch_size'], self.params['num_workers'])
+                                                                    self.params['batch_size'], self.params['num_workers'],
+                                                                    self.params['adv_attack_test']['test_start_idx'],
+                                                                    self.params['adv_attack_test']['test_end_idx'])
             adv_test_flag = True if attack.name is not "NoAttack" else False  # This flag indicates whether the testset is already adversarial
             dataloaders = {'train': trainloader,
                            'test': testloader,

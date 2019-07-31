@@ -51,7 +51,7 @@ def execute_normalize_prob(prob_list):
 
 def compute_log_loss(normalized_prob, true_label):
     # Compute the log loss
-    return -np.log10(normalized_prob[true_label] + np.finfo(float).eps)
+    return -np.log(normalized_prob[true_label] + np.finfo(float).eps)
 
 
 def calculate_top_k_acc(results_dict, top_k, prob_thresh=0.0):
@@ -101,7 +101,7 @@ def load_results_to_df(files, is_random_labels=False, is_out_of_dist=False, idx=
         idx = set(idx)
     statistic_pnml_df = calc_statistic_from_df_single(pnml_df.loc[idx]).rename(columns={'statistics': 'nml'})
     pnml_df = pnml_df.add_prefix('nml_')
-    pnml_df = pnml_df.rename(columns={'nml_log10_norm_factor': 'log10_norm_factor'})
+    pnml_df = pnml_df.rename(columns={'nml_log_norm_factor': 'log_norm_factor'})
 
     # ERM
     erm_df = result_dict_to_erm_df(results_dict, is_random_labels=is_random_labels, is_out_of_dist=is_out_of_dist)
@@ -136,7 +136,7 @@ def result_dict_to_nml_df(results_dict, is_random_labels=False, is_out_of_dist=F
     cls_keys = list(filter(lambda l: l.isdigit(), list(results_dict['0'].keys())))  # extract only the digits keys
     cls_keys = [int(k) for k in cls_keys]
     df_col = [str(x) for x in range(min(cls_keys), max(cls_keys)+1)] + \
-             ['true_label', 'loss', 'log10_norm_factor', 'entropy']
+             ['true_label', 'loss', 'log_norm_factor', 'entropy']
     nml_dict = {}
     for col in df_col:
         nml_dict[col] = []
@@ -153,7 +153,7 @@ def result_dict_to_nml_df(results_dict, is_random_labels=False, is_out_of_dist=F
             'loss'].append(None)
         for prob_label, prob_single in enumerate(prob_nml):
             nml_dict[str(prob_label)].append(prob_single)
-        nml_dict['log10_norm_factor'].append(np.log10(norm_factor))
+        nml_dict['log_norm_factor'].append(np.log(norm_factor))
         loc.append(int(keys))
         nml_dict['entropy'].append(entropy(prob_nml, base=10))
 
@@ -271,7 +271,7 @@ def create_twice_univ_df(results_df_list: list):
     # Normalize the prob
     normalization_factor = twice_df.sum(axis=1)
     twice_df = twice_df.divide(normalization_factor, axis='index')
-    twice_df['log10_norm_factor'] = normalization_factor
+    twice_df['log_norm_factor'] = normalization_factor
 
     # Add true label column
     twice_df['true_label'] = results_df_list[0]['true_label'].astype(int)
@@ -285,7 +285,7 @@ def create_twice_univ_df(results_df_list: list):
     loss = []
     entropy_list = []
     for index, row in twice_df.iterrows():
-        loss.append(-np.log10(row[str(int(row['true_label']))]))
+        loss.append(-np.log(row[str(int(row['true_label']))]))
         entropy_list.append(entropy(np.array(row[[str(x) for x in range(10)]]).astype(float)))
     twice_df['loss'] = loss
     twice_df['entropy'] = entropy_list
@@ -336,7 +336,7 @@ def create_risk_minimizer_df(results_df_list):
 
     risk_list = []
     for df in results_df_list:
-        risk_list.append(df['log10_norm_factor'])
+        risk_list.append(df['log_norm_factor'])
     df_index_min_risk = np.argmin(risk_list, axis=0).tolist()  # find the dataframe index with the lowest loss
 
     for ii in idx_common:
@@ -377,7 +377,7 @@ def create_bagging_df(results_df_list):
     loss = []
     entropy_list = []
     for index, row in bagging_df.iterrows():
-        loss.append(-np.log10(row[str(int(row['true_label']))]))
+        loss.append(-np.log(row[str(int(row['true_label']))]))
         entropy_list.append(entropy(np.array(row[[str(x) for x in range(10)]]).astype(float)))
         assert(np.isclose(row[[str(x) for x in range(10)]].sum(), 1.0, rtol=1e-04))
     bagging_df['loss'] = loss

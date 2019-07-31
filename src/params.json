@@ -81,7 +81,9 @@
             "pgd_iter": 7,
             "pgd_step": 0.0078,
             "pgd_rand_start": true,
-            "pgd_test_restart_num": 1
+            "pgd_test_restart_num": 1,
+            "test_start_idx": 0,
+            "test_end_idx": 1
         },
         "initial_training": {
             "_comment": "===== IMAGE-NET ADV. TRAINING =====",
@@ -98,8 +100,6 @@
             "step_size": [5],
             "gamma": 0.1,
             "weight_decay": 0.0001,
-            "test_start_idx": 0,
-            "test_end_idx": 1,
             "fix_type": "pgd",
             "epsilon": 0.0004,
             "pgd_iter": 1,
@@ -117,12 +117,14 @@
             "white_box": true,
             "black_box_model_arch": "MNISTClassifier",
             "black_box_model_path": "./trained_models/mnist_classifier/pgd_ep100_eps0.3_restart20_uniformRnd/mnist_adversarial_model_0.048931.pt",
-            "attack_type": "no_attack",
+            "attack_type": "pgd",
             "epsilon": 0.0313,
             "pgd_iter": 20,
             "pgd_step": 0.0078,
             "pgd_rand_start": true,
-            "pgd_test_restart_num": 1
+            "pgd_test_restart_num": 1,
+            "test_start_idx": 0,
+            "test_end_idx": 499
         },
         "initial_training": {
             "_comment": "===== CIFAR ADV. TRAINING =====",
@@ -130,7 +132,7 @@
             "eval_test_every_n_epoch": 1,
             "save_model_every_n_epoch": 3,
             "model_arch": "wide_resnet",
-            "pretrained_model_path": "./output/cifar_adversarial_results_20190728_165449/cifar_adversarial_model_0.065081.pt",
+            "pretrained_model_path": "./output/cifar_adversarial_results_20190729_103422/cifar_adversarial_model_0.000710.pt",
             "epochs": 204,
             "lr": 0.01,
             "momentum": 0.9,
@@ -153,13 +155,11 @@
             "step_size": [5],
             "gamma": 0.1,
             "weight_decay": 0.0001,
-            "test_start_idx": 0,
-            "test_end_idx": 49,
             "fix_type": "pgd",
             "epsilon": 0.06,
             "pgd_iter": 1,
             "pgd_step": 0.06,
-            "pgd_rand_start": false,
+            "pgd_rand_start": true,
             "pgd_test_restart_num": 1
         }
     },
@@ -168,7 +168,7 @@
         "num_workers": 4,
         "freeze_layer": 0,
         "adv_attack_test": {
-            "_comment": "===== ADVERSARY TESTING =====",
+            "_comment": "===== MNIST ADVERSARY TESTING =====",
             "white_box": true,
             "black_box_model_arch": "MNISTClassifier",
             "black_box_model_path": "./trained_models/mnist_classifier/pgd_ep100_eps0.3_restart20_uniformRnd/mnist_adversarial_model_0.048931.pt",
@@ -177,10 +177,12 @@
             "pgd_iter": 40,
             "pgd_step": 0.01,
             "pgd_rand_start": true,
-            "pgd_test_restart_num": 40
+            "pgd_test_restart_num": 40,
+            "test_start_idx": 0,
+            "test_end_idx": 49
         },
         "initial_training": {
-            "_comment": "===== ADVERSARY TRAINING =====",
+            "_comment": "===== MNIST ADVERSARY TRAINING =====",
             "do_initial_training": true,
             "model_arch": "MNISTClassifier",
             "eval_test_every_n_epoch": 1,
@@ -208,8 +210,6 @@
             "step_size": [5],
             "gamma": 0.1,
             "weight_decay": 0.0001,
-            "test_start_idx": 0,
-            "test_end_idx": 49,
             "fix_type": "pgd",
             "epsilon": 0.1,
             "pgd_iter": 1,

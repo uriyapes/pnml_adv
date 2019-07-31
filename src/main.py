@@ -133,7 +133,7 @@ def run_experiment(experiment_type: str, first_idx: int = None, last_idx: int = 
     # Iterate over test dataset
     logger.info('Execute PNML')
     logger.info('Iterate over test dataset')
-    for idx in range(params_fit_to_sample['test_start_idx'], params_fit_to_sample['test_end_idx'] + 1):
+    for idx in range(params['adv_attack_test']['test_start_idx'], params['adv_attack_test']['test_end_idx'] + 1):
         time_start_idx = time.time()
 
         # Extract a sample from test dataset and check output of base model

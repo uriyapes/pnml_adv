@@ -388,7 +388,7 @@ class CIFAR10AdversarialTest(datasets.CIFAR10):
     """
     Implementing adversarial attack to CIFAR10 testset.
     """
-    def __init__(self, attack, transform, **kwargs):
+    def __init__(self, attack, start_idx, end_idx, transform, **kwargs):
         """
 
         :param attack: the attack that will be activate on the original MNIST testset
@@ -397,23 +397,25 @@ class CIFAR10AdversarialTest(datasets.CIFAR10):
         """
         super(CIFAR10AdversarialTest, self).__init__(**kwargs)
         assert(self.train is False)
+        assert(start_idx >= 0 and end_idx < self.test_data.shape[0])
+        test_samples = end_idx - start_idx + 1
         grp_size = 100
-        test_samples = int(self.test_data.shape[0] / 30)  # TODO: remove division by 30
-        test_samples = 500 # TODO: REMOVE
+        assert(test_samples % grp_size == 0)
+
         test_adv_data = torch.zeros([test_samples, 3, 32, 32])
         from utilities import plt_img
-        plt_img(self.test_data, 2)
+        plt_img(self.test_data, 0)
         for index in range(test_samples):
             # use the transform on all the testset
-            img = Image.fromarray(self.test_data[index])
+            img = Image.fromarray(self.test_data[index+start_idx])
             test_adv_data[index] = transform(img)
-        plt_img(test_adv_data, 2)
+        plt_img(test_adv_data, 0)
         self.test_data = test_adv_data
-        self.test_labels = torch.LongTensor(self.test_labels[0:test_samples])
+        self.test_labels = torch.LongTensor(self.test_labels[start_idx:end_idx+1])
 
         device = TorchUtils.get_device()
         for index in range(int(test_samples / grp_size)):
-            print(index)
+            # print(index)
             # save the adversarial testset
             self.test_data[index * grp_size:(index + 1) * grp_size] = attack.create_adversarial_sample(
                 self.test_data[index * grp_size:(index + 1) * grp_size].to(device),
@@ -421,7 +423,7 @@ class CIFAR10AdversarialTest(datasets.CIFAR10):
 
         self.test_data = self.test_data.to("cpu")
         self.transform = null_transform
-        plt_img(self.test_data, 2)
+        plt_img(self.test_data, 0)
 
     def __getitem__(self, index):
         """
@@ -441,14 +443,17 @@ class CIFAR10AdversarialTest(datasets.CIFAR10):
 
 
 def create_adversarial_cifar10_dataloaders(attack, data_dir: str = './data', batch_size: int = 128, num_workers: int = 4,
-                                           train_augmentation: bool = True):
+                                           start_idx=0, end_idx=9999, train_augmentation: bool = True):
     """
     create train and test pytorch dataloaders for CIFAR10 dataset
+    :param attack:
     :param data_dir: the folder that will contain the data
     :param adversarial_dir: the output dir to which the gradient adversarial sign will be saved.
     :param epsilon: the additive gradient strength to be added to the image.
     :param batch_size: the size of the batch for test and train loaders
     :param num_workers: number of cpu workers which loads the GPU with the dataset
+    :param start_idx:
+    :param end_idx:
     :return: train and test loaders along with mapping between labels and class names
     """
     if train_augmentation:
@@ -480,7 +485,8 @@ def create_adversarial_cifar10_dataloaders(attack, data_dir: str = './data', bat
                                  train=False,
                                  download=True,
                                  transform=cifar_transform_test,
-                                 attack=attack)
+                                 attack=attack,start_idx=start_idx,
+                                 end_idx=end_idx)
     testloader = data.DataLoader(testset,
                                  batch_size=batch_size,
                                  shuffle=False,
