@@ -177,9 +177,9 @@
             "pgd_iter": 40,
             "pgd_step": 0.01,
             "pgd_rand_start": true,
-            "pgd_test_restart_num": 40,
+            "pgd_test_restart_num": 20,
             "test_start_idx": 0,
-            "test_end_idx": 49
+            "test_end_idx": 9999
         },
         "initial_training": {
             "_comment": "===== MNIST ADVERSARY TRAINING =====",

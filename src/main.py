@@ -64,8 +64,9 @@ def run_experiment(experiment_type: str, first_idx: int = None, last_idx: int = 
     ################
     # Run basic training- so the base model will be in the same conditions as NML model
     params_init_training = params['initial_training']
+    logger.info('Load model')
+    model_base = experiment_h.get_model(params_init_training['model_arch'], params_init_training['pretrained_model_path'])
     if 'initial_training' in params and params['initial_training']['do_initial_training'] is True:
-        model_base = experiment_h.get_model(params['initial_training']['model_arch'])
         logger.info('Execute basic training')
         train_class = TrainClass(filter(lambda p: p.requires_grad, model_base.parameters()),
                                  params_init_training['lr'],
@@ -86,10 +87,7 @@ def run_experiment(experiment_type: str, first_idx: int = None, last_idx: int = 
                                                                     params_init_training['eval_test_every_n_epoch'])
         torch.save(model_base.state_dict(),
                    os.path.join(logger.output_folder, '%s_model_%f.pt' % (experiment_h.get_exp_name(), train_loss)))
-    else:
-        logger.info('Load pretrained model')
-        model_base = experiment_h.get_pretrained_model(params_init_training['model_arch'],
-                                                       params_init_training['pretrained_model_path'])
+
         # model_base = load_pretrained_model(model_base, params['initial_training']['pretrained_model_path'])
         # model_base_backup = copy.deepcopy(model_base)
 
@@ -167,9 +165,11 @@ def run_experiment(experiment_type: str, first_idx: int = None, last_idx: int = 
                                   model_base, logger, genie_only_training=False)
 
         # Log and save
-        logger.save_json_file()
+        if idx % 1000 == 0:
+            logger.save_json_file()
         time_idx = time.time() - time_start_idx
         logger.info('----- Finish %s idx = %d, time=%f[sec] ----' % (experiment_h.get_exp_name(), idx, time_idx))
+    logger.save_json_file()
     result_df, statistics_df = load_results_to_df([logger.json_file_name])
     logger.info(statistics_df.transpose())
     logger.info("number of test samples:{}".format(result_df.shape[0]))

@@ -539,7 +539,7 @@ class MnistAdversarialTest(datasets.MNIST):
         super(MnistAdversarialTest, self).__init__(**kwargs)
         assert(self.train is False)
         grp_size = 100
-        test_samples = int(self.test_data.shape[0] / 30)# TODO: remove division by 30
+        test_samples = int(self.test_data.shape[0])
         test_adv_data = torch.zeros([test_samples, 1, 28, 28])
         from utilities import plt_img
         plt_img(self.test_data, 0)

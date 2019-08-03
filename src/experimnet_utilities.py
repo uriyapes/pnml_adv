@@ -153,36 +153,15 @@ class Experiment:
         dataloaders['dataset_name'] = self.exp_type
         return dataloaders
 
-    def get_pretrained_model(self, model_arch='resnet18', model_path=None):
-        if self.exp_type == 'pnml_cifar10':
-            model = load_pretrained_resnet20_cifar10_model(resnet20())
-        elif self.exp_type == 'out_of_dist_svhn':
-            model = load_pretrained_resnet20_cifar10_model(resnet20())
-        elif self.exp_type == 'out_of_dist_noise':
-            model = load_pretrained_resnet20_cifar10_model(resnet20())
-        elif self.exp_type == 'imagenet_adversarial':
-            model = load_pretrained_imagenet_model(model_arch)
-        elif model_path is not None:
-            model_skeleton = self.get_model(model_arch)
-            model = load_pretrained_model(model_skeleton, model_path)
-        else:
-            raise NameError('No experiment type: %s' % self.exp_type)
-        return model
-
-    def get_model(self, model_arch: str = None):
-        if self.exp_type == 'random_labels':
-            model = WideResNet()
-        elif self.exp_type == 'pnml_mnist':
-            model = Net()
-        elif self.exp_type == 'cifar_adversarial':
-            # model = load_pretrained_resnet20_cifar10_model(resnet20())
-            # model = resnet110()
-            # model = WideResNet()
-            if model_arch == 'wide_resnet':
-                model = MadryWideResNet(depth=34, num_classes=10, widen_factor=10, dropRate=0.0)
-            else:
-                raise NameError('No model_arch type %s for %s experiment' % (str(model_arch), self.exp_type))
-        elif self.exp_type == 'mnist_adversarial':
+    def get_model(self, model_arch: str, ckpt_path: str):
+        """
+        Load a untrained or trained model according to the experiment type and if a ckpt_path is given.
+        :param model_arch: the architecture of the model
+        :param ckpt_path: the path to the model .ckpt file. If no ckpt_path is given then the initial model is loaded
+        :return:
+        """
+        ckpt_path = None if ckpt_path is "None" else ckpt_path
+        if self.exp_type is "mnist_adversarial":
             if model_arch == 'Net':
                 model = Net()
             elif model_arch == 'Net_800_400_100':
@@ -191,9 +170,19 @@ class Experiment:
                 model = MNISTClassifier()
             else:
                 raise NameError('No model_arch type %s for %s experiment' % (str(model_arch), self.exp_type))
+            model = load_pretrained_model(model, ckpt_path) if ckpt_path is not None else model
+        elif self.exp_type is "cifar_adversarial":
+            if model_arch == 'wide_resnet':
+                model = MadryWideResNet(depth=34, num_classes=10, widen_factor=10, dropRate=0.0)
+            else:
+                raise NameError('No model_arch type %s for %s experiment' % (str(model_arch), self.exp_type))
+            model = load_pretrained_model(model, ckpt_path) if ckpt_path is not None else model
+        elif self.exp_type is "imagenet_adversarial":
+            model = load_pretrained_imagenet_model(model_arch)
+        elif self.exp_type == 'pnml_cifar10':
+            model = load_pretrained_resnet20_cifar10_model(resnet20())
         else:
             raise NameError('No experiment type: %s' % self.exp_type)
-
         return model
 
     def get_exp_name(self):
