@@ -161,7 +161,7 @@ class Experiment:
         :return:
         """
         ckpt_path = None if ckpt_path is "None" else ckpt_path
-        if self.exp_type is "mnist_adversarial":
+        if self.exp_type == "mnist_adversarial":
             if model_arch == 'Net':
                 model = Net()
             elif model_arch == 'Net_800_400_100':
@@ -171,13 +171,13 @@ class Experiment:
             else:
                 raise NameError('No model_arch type %s for %s experiment' % (str(model_arch), self.exp_type))
             model = load_pretrained_model(model, ckpt_path) if ckpt_path is not None else model
-        elif self.exp_type is "cifar_adversarial":
+        elif self.exp_type == "cifar_adversarial":
             if model_arch == 'wide_resnet':
                 model = MadryWideResNet(depth=34, num_classes=10, widen_factor=10, dropRate=0.0)
             else:
                 raise NameError('No model_arch type %s for %s experiment' % (str(model_arch), self.exp_type))
             model = load_pretrained_model(model, ckpt_path) if ckpt_path is not None else model
-        elif self.exp_type is "imagenet_adversarial":
+        elif self.exp_type == "imagenet_adversarial":
             model = load_pretrained_imagenet_model(model_arch)
         elif self.exp_type == 'pnml_cifar10':
             model = load_pretrained_resnet20_cifar10_model(resnet20())
