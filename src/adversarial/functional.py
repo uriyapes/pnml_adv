@@ -29,7 +29,6 @@ def fgsm(model: Module,
         x_adv: Adversarially perturbed version of x
     """
     x.requires_grad = True
-    model.train()
     prediction = model(x)
     loss = loss_fn(prediction, y)
     loss.backward(retain_graph=True)
