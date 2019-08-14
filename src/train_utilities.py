@@ -211,7 +211,7 @@ class TrainClass:
 
     @classmethod
     def __forward_pass(cls, model, images, labels):
-        outputs = model(images)
+        outputs = model(images, labels)
         loss = cls.criterion(outputs, labels)  # Negative log-loss
         return outputs, loss
 
@@ -230,11 +230,11 @@ class TrainClass:
             print("iter_num: {}".format(iter_num))
             data, labels = TorchUtils.to_device(data), TorchUtils.to_device(labels)
             adv_data = attack.create_adversarial_sample(data, labels)
-            with torch.no_grad():
-                outputs, batch_loss = cls.__forward_pass(model, adv_data, labels)
-                loss += batch_loss * len(adv_data)  # loss sum for all the batch
-                _, predicted = torch.max(outputs.data, 1)
-                correct += (predicted == labels).sum().item()
+            # with torch.no_grad():
+            outputs, batch_loss = cls.__forward_pass(model, adv_data, labels)
+            loss += batch_loss * len(adv_data)  # loss sum for all the batch
+            _, predicted = torch.max(outputs.data, 1)
+            correct += (predicted == labels).sum().item()
 
         acc = correct / len(dataloader.dataset)
         loss /= len(dataloader.dataset)

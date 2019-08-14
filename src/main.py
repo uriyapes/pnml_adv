@@ -7,8 +7,8 @@ import argparse
 import torch
 torch.manual_seed(1)
 import numpy as np
-# torch.backends.cudnn.deterministic = True
-torch.backends.cudnn.benchmark = True
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
 np.random.seed(0)
 
 
@@ -20,7 +20,7 @@ from models.model_utils import load_pretrained_model
 from utilities import plt_img, TorchUtils
 from analyze_utilities import load_results_to_df
 TorchUtils.set_device(None)  # 'cuda' or 'cpu' or None
-# torch.set_anomaly_enabled(True)
+torch.set_anomaly_enabled(True)
 """
 Example of running:
 CUDA_VISIBLE_DEVICES=0 python src/main.py -t pnml_cifar10

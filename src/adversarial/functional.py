@@ -29,11 +29,12 @@ def fgsm(model: Module,
         x_adv: Adversarially perturbed version of x
     """
     x.requires_grad = True
-    prediction = model(x)
+    prediction = model(x, y)
     loss = loss_fn(prediction, y)
     loss.backward(retain_graph=True)
 
-    x_adv = (x + torch.sign(x.grad) * eps).clamp(*clamp).detach()
+    # x_adv = (x + torch.sign(x.grad) * eps).clamp(*clamp).detach()
+    x_adv = (x + x.grad + torch.sign(x.grad) * eps).detach()
     x.requires_grad = False
     return x_adv
 
@@ -88,7 +89,7 @@ def _iterative_gradient(model: Module,
         # _x_adv = x_adv.clone().detach().requires_grad_(True)
         x_adv = x_adv.detach()
         x_adv.requires_grad_(True)
-        prediction = model(x_adv)
+        prediction = model(x_adv, y)
         loss = loss_fn(prediction, y_target if targeted else y).mean()
         loss.backward(retain_graph=True)
 
@@ -113,7 +114,7 @@ def _iterative_gradient(model: Module,
         # Project back into l_norm ball and correct range
         x_adv = project(x, x_adv, norm, eps).clamp(*clamp)
     x_adv = x_adv.detach()
-    prediction = model(x_adv)
+    prediction = model(x_adv, y)
     adv_loss = loss_fn(prediction, y_target if targeted else y)
 
     return x_adv, adv_loss

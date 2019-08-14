@@ -6,7 +6,7 @@ from dataset_utilities import create_cifar10_random_label_dataloaders
 from dataset_utilities import create_mnist_dataloaders
 from dataset_utilities import create_svhn_dataloaders
 from dataset_utilities import dataloaders_noise
-from models.mpl import Net, Net_800_400_100, MNISTClassifier
+from models.mpl import Net, Net_800_400_100, MNISTClassifier, PnmlMnistClassifier
 from models.resnet import resnet20, load_pretrained_resnet20_cifar10_model
 from models.wide_resnet_original import WideResNet
 from models.wide_resnet import WideResNet as MadryWideResNet
@@ -170,6 +170,8 @@ class Experiment:
                 model = Net_800_400_100()
             elif model_arch == 'MNISTClassifier':
                 model = MNISTClassifier()
+            elif model_arch == 'PnmlMnistClassifier':
+                model = PnmlMnistClassifier()
             else:
                 raise NameError('No model_arch type %s for %s experiment' % (str(model_arch), self.exp_type))
             model = load_pretrained_model(model, ckpt_path) if ckpt_path is not None else model
