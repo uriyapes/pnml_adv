@@ -146,7 +146,9 @@ class Experiment:
 
             dataloaders['adv_test_flag'] = True if attack.name is not "NoAttack" else False # This flag indicates whether the testset is already adversarial
             dataloaders['test'], _ = create_adv_mnist_test_dataloader_preprocessed(attack, data_folder,
-                                                                 self.params['batch_size'], self.params['num_workers'])
+                                                                 self.params['batch_size'], self.params['num_workers'],
+                                                                 self.params['adv_attack_test']['test_start_idx'],
+                                                                  self.params['adv_attack_test']['test_end_idx'])
         else:
             raise NameError('No experiment type: %s' % self.exp_type)
 

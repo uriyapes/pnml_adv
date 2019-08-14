@@ -74,7 +74,6 @@ def load_pretrained_imagenet_model(model_name):
     return TorchUtils.to_device(model_with_norm)
 
 
-
 def per_image_standardization_tf(x: torch.Tensor):
     """Linearly scales `image` to have zero mean and unit variance.
     This op computes `(x - mean) / adjusted_stddev`, where `mean` is the average
@@ -99,6 +98,23 @@ def per_image_standardization_tf(x: torch.Tensor):
     std = torch.sqrt((1/pix_num) * torch.sum(x**2, dim=(1, 2, 3), keepdim=True) - (mean**2))
     adjusted_stddev = torch.max(std, min_stddev)
     return (x - mean) / adjusted_stddev
+
+
+class AddNoiseTransform(object):
+    """Adds gaussian noise to the image
+    Args:
+      x: An N-D Tensor where the first dimension is the batch dimension and the others are [Channels, Height, Width]
+    Returns:
+      The noisy image with same shape as `image`.
+    """
+    def __init__(self):
+        pass
+
+    def __call__(self, x):
+        # Returns a tensor with the same size as input that is filled with random numbers from a uniform distribution on the interval
+        noisy_x = x + 3 * torch.rand_like(x)
+        # noisy_x = x + np.random.normal(0,1,x.shape)
+        return noisy_x
 
 
 class NormalizeCls(nn.Module):

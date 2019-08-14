@@ -529,7 +529,7 @@ class MnistAdversarialTest(datasets.MNIST):
     Implementing adversarial attack on MNIST testset.
     """
 
-    def __init__(self, attack, transform, **kwargs):
+    def __init__(self, attack, start_idx, end_idx, transform, **kwargs):
         """
 
         :param attack: the attack that will be activate on the original MNIST testset
@@ -538,8 +538,11 @@ class MnistAdversarialTest(datasets.MNIST):
         """
         super(MnistAdversarialTest, self).__init__(**kwargs)
         assert(self.train is False)
+        assert(start_idx >= 0 and end_idx < self.test_data.shape[0])
+        test_samples = end_idx - start_idx + 1
         grp_size = 100
-        test_samples = int(self.test_data.shape[0])
+        assert(test_samples % grp_size == 0)
+
         test_adv_data = torch.zeros([test_samples, 1, 28, 28])
         from utilities import plt_img
         plt_img(self.test_data, 0)
@@ -551,7 +554,7 @@ class MnistAdversarialTest(datasets.MNIST):
         self.test_data = test_adv_data
         device = TorchUtils.get_device()
         for index in range(int(test_samples / grp_size)):
-            print(index)
+            # print(index)
             # save the adversarial testset
             self.test_data[index*grp_size:(index+1)*grp_size] = attack.create_adversarial_sample(
                                                 self.test_data[index*grp_size:(index+1)*grp_size].to(device),
@@ -578,7 +581,8 @@ class MnistAdversarialTest(datasets.MNIST):
         return img, target
 
 
-def create_adv_mnist_test_dataloader_preprocessed(attack, data_dir: str = './data', batch_size: int = 128, num_workers: int = 4):
+def create_adv_mnist_test_dataloader_preprocessed(attack, data_dir: str = './data', batch_size: int = 128,
+                                                  num_workers: int = 4, start_idx: int = 0, end_idx: int = 9999):
     """
     Create adversarial test  dataloader for MNIST dataset. The data in the dataloader.dataset is already adversarial.
     :param attack: get instace of the adversarial attack
@@ -593,7 +597,9 @@ def create_adv_mnist_test_dataloader_preprocessed(attack, data_dir: str = './dat
                                download=True,
                                transform=transforms.Compose([transforms.ToTensor(),
                                                              normalize_mnist]),
-                               attack=attack)
+                               attack=attack,
+                               start_idx=start_idx,
+                               end_idx=end_idx)
 
     testloader = data.DataLoader(testset,
                                  batch_size=batch_size,
