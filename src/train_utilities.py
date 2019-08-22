@@ -226,15 +226,18 @@ class TrainClass:
         model.eval()
         loss = 0
         correct = 0
-        for iter_num, (data, labels) in enumerate(dataloader):
-            print("iter_num: {}".format(iter_num))
-            data, labels = TorchUtils.to_device(data), TorchUtils.to_device(labels)
-            adv_data = attack.create_adversarial_sample(data, labels)
-            # with torch.no_grad():
-            outputs, batch_loss = cls.__forward_pass(model, adv_data, labels)
-            loss += batch_loss * len(adv_data)  # loss sum for all the batch
-            _, predicted = torch.max(outputs.data, 1)
-            correct += (predicted == labels).sum().item()
+        with torch.no_grad():
+            for iter_num, (data, labels) in enumerate(dataloader):
+                # print("iter_num: {}".format(iter_num))
+                data, labels = TorchUtils.to_device(data), TorchUtils.to_device(labels)
+                adv_data = attack.create_adversarial_sample(data, labels)
+                with torch.enable_grad():
+                    outputs, batch_loss = cls.__forward_pass(model, adv_data, labels)
+                loss += batch_loss * len(adv_data)  # loss sum for all the batch
+                _, predicted = torch.max(outputs.data, 1)
+                correct += (predicted == labels).sum().item()
+                if (predicted == labels).sum().item() == 1:
+                    print("iter_num: {}".format(iter_num))
 
         acc = correct / len(dataloader.dataset)
         loss /= len(dataloader.dataset)
@@ -266,11 +269,11 @@ def eval_single_sample(model, test_sample_data):
 
         # Prediction
         pred = output.max(1, keepdim=True)[1]
-        pred = pred.numpy().round(16)[0][0]
+        pred = pred.numpy()[0][0]
 
         # Extract prob
         prob = F.softmax(output, dim=-1)
-        prob = prob.numpy().round(16).tolist()[0]
+        prob = prob.numpy().tolist()[0]
     return prob, pred
 
 
@@ -444,6 +447,7 @@ def execute_pnml_adv_fix(pnml_params: dict, params_init_training: dict, dataload
         # Evaluate with base model
         assert(not model.training)
         x_refine = refinement.create_adversarial_sample(sample_test_data_trans, true_label_expand, fix_label_expand)
+        assert(sample_test_data_trans.grad is None)
         prob, pred = eval_single_sample(model, x_refine)
 
         global execute_pnml_adv_fix_ind

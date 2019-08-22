@@ -60,9 +60,7 @@ class FGSM(Attack):
         Returns:
             x_adv: Adversarially perturbed version of x
         """
-        if y_target is not None:
-            raise NotImplementedError
-        return fgsm(self.model, x, y, self.loss_fn, self.eps, self.clamp)
+        return fgsm(self.model, x, y, self.loss_fn, self.eps, y_target, self.clamp)
 
 
 class PGD(Attack):

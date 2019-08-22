@@ -51,7 +51,7 @@ def execute_normalize_prob(prob_list):
 
 def compute_log_loss(normalized_prob, true_label):
     # Compute the log loss
-    return -np.log(normalized_prob[true_label] + np.finfo(float).eps)
+    return -np.log(normalized_prob[true_label] + np.finfo(float).tiny)
 
 
 def calculate_top_k_acc(results_dict, top_k, prob_thresh=0.0):

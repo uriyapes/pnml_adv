@@ -540,27 +540,35 @@ class MnistAdversarialTest(datasets.MNIST):
         assert(self.train is False)
         assert(start_idx >= 0 and end_idx < self.test_data.shape[0])
         test_samples = end_idx - start_idx + 1
-        grp_size = 100
+        grp_size = 1
         assert(test_samples % grp_size == 0)
 
-        test_adv_data = torch.zeros([test_samples, 1, 28, 28])
+        transform_data = torch.zeros([test_samples, 1, 28, 28])
         from utilities import plt_img
         plt_img(self.test_data, 0)
-        for index in range(test_samples):
+        for index in range(start_idx, end_idx+1):
             # use the transform on all the testset
             img = Image.fromarray(self.test_data[index].numpy(), mode='L')
-            test_adv_data[index] = transform(img)
+            transform_data[index] = transform(img)
 
-        self.test_data = test_adv_data
+        self.adv_data = transform_data
         device = TorchUtils.get_device()
         for index in range(int(test_samples / grp_size)):
-            # print(index)
+            print(index)
             # save the adversarial testset
-            self.test_data[index*grp_size:(index+1)*grp_size] = attack.create_adversarial_sample(
-                                                self.test_data[index*grp_size:(index+1)*grp_size].to(device),
+            self.adv_data[index*grp_size:(index+1)*grp_size] = attack.create_adversarial_sample(
+                                                self.adv_data[index*grp_size:(index+1)*grp_size].to(device),
                                                 self.test_labels[index*grp_size:(index+1)*grp_size].to(device))
 
-        self.test_data = self.test_data.to("cpu")
+
+        """
+        This method is pytorch version agnostic which returns the data buffer. 
+        """
+        if torch.__version__ == '0.4.1':
+            self.test_data = self.adv_data.to("cpu")
+        else:
+            self.data = self.adv_data.to("cpu")
+
         self.transform = null_transform
         plt_img(self.test_data, 0)
 
@@ -577,7 +585,7 @@ class MnistAdversarialTest(datasets.MNIST):
         target = self.test_labels[index]
         if self.target_transform is not None:
             target = self.target_transform(target)
-        img = self.test_data[index]
+        img = self.adv_data[index]
         return img, target
 
 

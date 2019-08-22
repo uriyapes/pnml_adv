@@ -31,15 +31,18 @@ class MNISTClassifier(ModelTemplate):
         x = F.relu(F.max_pool2d(self.conv1(x), 2))
         x = F.relu(F.max_pool2d(self.conv2(x), 2))
         x = x.view(-1, 1024)
-        x = self.fc1(x)
-        return F.log_softmax(x, dim=1)
+        output = self.fc1(x)
+        return output
+        # return F.log_softmax(x, dim=1)
+
+
 
 mnist_std = 0.3081
 mean_mnist = 0.1307
 mnist_min_val = (0 - mean_mnist) / mnist_std
 mnist_max_val = (1 - mean_mnist) / mnist_std
 class PnmlMnistClassifier(MNISTClassifier):
-    def __init__(self, eps=0.3, gamma=0.0):
+    def __init__(self, eps=0.3, gamma=0.1):
         super(PnmlMnistClassifier, self).__init__()
         self.eps = eps * (mnist_max_val - mnist_min_val)
         self.gamma = gamma * (mnist_max_val - mnist_min_val)
@@ -47,7 +50,7 @@ class PnmlMnistClassifier(MNISTClassifier):
         # self.conv2 = nn.Conv2d(32, 64, kernel_size=5)
         # self.fc1 = nn.Linear(1024, 10)
         self.clamp = (mnist_min_val, mnist_max_val)
-        self.loss_fn = torch.nn.CrossEntropyLoss()
+        self.loss_fn = torch.nn.CrossEntropyLoss(reduction='sum')
 
     def forward(self, x, true_label):
         # x.require_grad = True
@@ -59,13 +62,26 @@ class PnmlMnistClassifier(MNISTClassifier):
         # grad = torch.autograd.grad(loss, x, create_graph=True, allow_unused=True)[0]
         # x_adv = x + grad + torch.sign(grad) * self.eps
         # x.requires_grad = False
+        num_classes = 10
+        genie_prob = torch.zeros([x.shape[0], num_classes], requires_grad=True).to(x.device)
+        for label in range(num_classes):
+            torch_label = torch.ones([x.shape[0]], dtype=torch.long).to(x.device) * label
+            genie_prob[:, label] = F.softmax(self.forward_genie(x, torch_label), dim=1)[:, label]
+        pnml_prob = genie_prob / genie_prob.sum(dim =1, keepdim=True)
+        # assert(torch.allclose(pnml_prob.sum(dim=1), ))
+        return pnml_prob
 
-        x_adv = x
-        x_adv.requires_grad = True
-        adv_log_prob = self.forward_base_model(x_adv)
-        adv_loss = self.loss_fn(adv_log_prob, true_label)
-        adv_grad = torch.autograd.grad(adv_loss, x_adv, create_graph=True, allow_unused=True)[0]
-        x_genie = (x_adv - torch.sign(adv_grad) * self.gamma) #.clamp(*self.clamp)
+    def forward_genie(self, x, label):
+        # x = x.clone()
+        x.requires_grad = True
+        # x_adv.requires_grad = True
+        output = self.forward_base_model(x)
+        adv_loss = self.loss_fn(output, label) #TODO : make sure the loss doesn't do mean() so grad value will be the same no matter the batch size.
+        adv_grad = torch.autograd.grad(adv_loss, x, create_graph=True, allow_unused=True)[0]
+        # adv_grad_sign = torch.sign(adv_grad)
+        adv_grad_sign = adv_grad * 500
+        # x_genie = (x - adv_grad_sign * self.gamma)
+        x_genie = (x - adv_grad_sign * self.gamma)#.clamp(*self.clamp)
         return self.forward_base_model(x_genie)
 
     def forward_base_model(self, x):

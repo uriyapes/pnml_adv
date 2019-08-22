@@ -53,8 +53,8 @@ def run_experiment(experiment_type: str, first_idx: int = None, last_idx: int = 
     logger.info('Load datasets: %s' % data_folder)
     # Create a black-box attack for the testset using the model from black_box_model_path
     if params['adv_attack_test']['white_box'] is False:
-        model = experiment_h.get_pretrained_model(params['adv_attack_test']['black_box_model_arch'],
-                                                  params['adv_attack_test']['black_box_model_path'])
+        model = experiment_h.get_model(params['adv_attack_test']['black_box_model_arch'],
+                                       params['adv_attack_test']['black_box_model_path'])
         # model = load_pretrained_model(experiment_h.get_model(params['adv_attack_test']['black_box_model_arch']),
         #                               params['adv_attack_test']['black_box_model_path'])
     else:
