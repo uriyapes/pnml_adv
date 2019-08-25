@@ -12,6 +12,7 @@ def fgsm(model: Module,
          y: torch.Tensor,
          loss_fn: Callable,
          eps: float,
+         y_target = None,
          clamp: Tuple[float, float] = (0, 1)) -> torch.Tensor:
     """Creates an adversarial sample using the Fast Gradient-Sign Method (FGSM)
 
@@ -28,12 +29,21 @@ def fgsm(model: Module,
     Returns:
         x_adv: Adversarially perturbed version of x
     """
+    x = x.detach()
     x.requires_grad = True
-    prediction = model(x)
-    loss = loss_fn(prediction, y)
+    targeted = y_target is not None
+    prediction = model(x, y)
+    loss = loss_fn(prediction, y_target if targeted else y)
     loss.backward(retain_graph=True)
 
-    x_adv = (x + torch.sign(x.grad) * eps).clamp(*clamp).detach()
+    # x_adv = (x + torch.sign(x.grad) * eps).clamp(*clamp).detach()
+    # x_adv = (x + x.grad + torch.sign(x.grad) * eps).detach()
+    # x_grad_sign = 1.0/100 * x.grad.sign()
+    x_grad_sign = x.grad *500
+    if not targeted:
+        x_adv = (x + x_grad_sign * eps).detach()#.clamp(*clamp)
+    else:
+        x_adv = (x - x_grad_sign * eps).detach()#.clamp(*clamp)
     x.requires_grad = False
     return x_adv
 
@@ -88,9 +98,9 @@ def _iterative_gradient(model: Module,
         # _x_adv = x_adv.clone().detach().requires_grad_(True)
         x_adv = x_adv.detach()
         x_adv.requires_grad_(True)
-        prediction = model(x_adv)
+        prediction = model(x_adv, y)
         loss = loss_fn(prediction, y_target if targeted else y).mean()
-        loss.backward(retain_graph=True)
+        loss.backward()
 
         with torch.no_grad():
             if step_norm == 'inf':
@@ -113,8 +123,9 @@ def _iterative_gradient(model: Module,
         # Project back into l_norm ball and correct range
         x_adv = project(x, x_adv, norm, eps).clamp(*clamp)
     x_adv = x_adv.detach()
-    prediction = model(x_adv)
+    prediction = model(x_adv, y)
     adv_loss = loss_fn(prediction, y_target if targeted else y)
+    x_adv.requires_grad_ = False
 
     return x_adv, adv_loss
 

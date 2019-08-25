@@ -99,7 +99,7 @@ class WideResNet(ModelTemplate):
             elif isinstance(m, nn.Linear):
                 m.bias.data.zero_()
 
-    def forward(self, x):
+    def forward(self, x, *args):
         x = per_image_standardization_tf(x)
         out = self.conv1(x)
         out = self.block1(out)
