@@ -26,25 +26,18 @@ Example of running:
 CUDA_VISIBLE_DEVICES=0 python src/main.py -t pnml_cifar10
 """
 
+def run_experiment(experiment_h):
 
-def run_experiment(experiment_type: str, first_idx: int = None, last_idx: int = None):
-    ################
-    # Load training params
-    with open(os.path.join('src', 'params.json')) as f:
-        params = json.load(f)
-
-    ################
-    # Class that depends ins the experiment type
-    experiment_h = Experiment(experiment_type, params, first_idx, last_idx)
     params = experiment_h.get_params()
 
     ################
     # Create logger and save params to output folder
-    logger = Logger(experiment_type=experiment_h.get_exp_name(), output_root='output')
+    logger = Logger(experiment_type=experiment_h.get_exp_name(), output_root=experiment_h.output_dir)
     # logger = Logger(experiment_type='TMP', output_root='output')
     logger.info('OutputDirectory: %s' % logger.output_folder)
+    logger.info('Device: %s' % TorchUtils.get_device())
     with open(os.path.join(logger.output_folder, 'params.json'), 'w', encoding='utf8') as outfile:
-        outfile.write(json.dumps(params, indent=4, sort_keys=True))
+        outfile.write(json.dumps(params, indent=4, sort_keys=False))
     logger.info(params)
 
     ################
@@ -184,14 +177,17 @@ if __name__ == "__main__":
                         type=str)
     parser.add_argument('-f', '--first_idx', default=None, help='first test idx', type=int)
     parser.add_argument('-l', '--last_idx', default=None, help='last test idx', type=int)
+    parser.add_argument('-p', '--param_file_path', default=os.path.join('src', 'params.json'),
+                        help='param file path used to load the parameters file containing default values to all '
+                             'parameters', type=str)
+    parser.add_argument('-e', '--test_eps', default=None, help='the epsilon strength of the attack', type=float)
+    parser.add_argument('-r', '--fix_eps', default=None, help='the epsilon strength of the refinement', type=float)
+    parser.add_argument('-o', '--output_root', default='output', help='the output directory where results will be saved', type=str)
+
     args = vars(parser.parse_args())
 
-    # Available experiment_type:
-    #   'pnml_cifar10'
-    #   'random_labels'
-    #   'out_of_dist_svhn'
-    #   'out_of_dist_noise'
-    #   'pnml_mnist'
+    experiment_h = Experiment(args)
 
-    run_experiment(args['experiment_type'], args['first_idx'], args['last_idx'])
+    run_experiment(experiment_h)
+
     print('Finish experiment')

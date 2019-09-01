@@ -540,7 +540,7 @@ class MnistAdversarialTest(datasets.MNIST):
         assert(self.train is False)
         assert(start_idx >= 0 and end_idx < self.test_data.shape[0])
         test_samples = end_idx - start_idx + 1
-        grp_size = 1
+        grp_size = 100
         assert(test_samples % grp_size == 0)
 
         transform_data = torch.zeros([test_samples, 1, 28, 28])

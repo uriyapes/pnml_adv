@@ -1,3 +1,5 @@
+import json
+
 from dataset_utilities import create_mnist_train_dataloader, create_adv_mnist_test_dataloader_preprocessed
 from dataset_utilities import create_imagenet_test_loader
 from dataset_utilities import create_adversarial_cifar10_dataloaders
@@ -16,8 +18,9 @@ from dataset_utilities import get_dataset_min_max_val
 
 
 class Experiment:
-    def __init__(self, exp_type: str, params: dict, first_idx, last_idx):
-        if exp_type not in ['pnml_cifar10',
+    def __init__(self, args):
+
+        if args['experiment_type'] not in ['pnml_cifar10',
                             'random_labels',
                             'out_of_dist_svhn',
                             'out_of_dist_noise',
@@ -26,38 +29,29 @@ class Experiment:
                             'cifar_adversarial',
                             'mnist_adversarial']:
             raise NameError('No experiment type: %s' % type)
-        self.params = params
-        self.exp_type = exp_type
-        self.executed_get_params = False
-        self.first_idx = first_idx
-        self.last_idx = last_idx
+        self.exp_type = args['experiment_type']
+        self.params = self.__load_params_from_file(args, self.exp_type)
+        self.output_dir = args['output_root']
+
+    @staticmethod
+    def __load_params_from_file(args, exp_type):
+        param_file_path = args['param_file_path']
+        with open(param_file_path) as f:         # Load the params for all experiments from param_file_path
+            params = json.load(f)
+        params = params[exp_type]
+        # Overwrite params from arguments given
+        if args['first_idx'] is not None and args['last_idx'] is not None:
+            params['adv_attack_test']['test_start_idx'] = args['first_idx']
+            params['adv_attack_test']['test_end_idx'] = args['last_idx']
+        if args['test_eps'] is not None:
+            params['adv_attack_test']['epsilon'] = args['test_eps']  #TODO: change step size aswell
+        if args['fix_eps'] is not None:
+            assert(params['fit_to_sample']['pgd_iter'] == 1)
+            params['fit_to_sample']['epsilon'] = args['fix_eps']
+            params['fit_to_sample']['pgd_step'] = args['fix_eps']
+        return params
 
     def get_params(self):
-        if self.exp_type == 'pnml_cifar10':
-            self.params = self.params['pnml_cifar10']
-        elif self.exp_type == 'random_labels':
-            self.params = self.params['random_labels']
-        elif self.exp_type == 'out_of_dist_svhn':
-            self.params = self.params['pnml_cifar10']
-        elif self.exp_type == 'out_of_dist_noise':
-            self.params = self.params['pnml_cifar10']
-        elif self.exp_type == 'pnml_mnist':
-            self.params = self.params['pnml_mnist']
-        elif self.exp_type == 'imagenet_adversarial':
-            self.params = self.params['imagenet_adversarial']
-        elif self.exp_type == 'cifar_adversarial':
-            self.params = self.params['cifar_adversarial']
-        elif self.exp_type == 'mnist_adversarial':
-            self.params = self.params['mnist_adversarial']
-        else:
-            raise NameError('No experiment type: %s' % self.exp_type)
-
-        if self.first_idx is not None and self.last_idx is not None:
-            # Overwrite params
-            self.params['adv_attack_test']['test_start_idx'] = self.first_idx
-            self.params['adv_attack_test']['test_end_idx'] = self.last_idx
-
-        self.executed_get_params = True
         return self.params
 
     def get_adv_dataloaders(self, datafolder, p, model=None):
@@ -77,9 +71,6 @@ class Experiment:
         return self.get_dataloaders(datafolder, attack)
 
     def get_dataloaders(self, data_folder: str = './data', attack=None):
-        if self.executed_get_params is False:
-            _ = self.get_params()
-
         if self.exp_type == 'pnml_cifar10':
             trainloader, testloader, classes = create_cifar10_dataloaders(data_folder,
                                                                           self.params['batch_size'],
@@ -190,7 +181,6 @@ class Experiment:
         return model
 
     def get_exp_name(self):
-
         if self.exp_type == 'pnml_cifar10':
             name = 'pnml_cifar10'
         elif self.exp_type == 'random_labels':

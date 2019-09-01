@@ -412,11 +412,41 @@ def find_results_in_path(path_to_folder:str):
     pathname = path_to_folder + '/**/results*.json'
     return glob.glob(pathname,  recursive=True)
 
+def create_nml_vs_eps_df(path_to_root_dir:str, eps_type:str = 'fix'):
+    """
+    Plot a graph of Accuracy as a function of epsilon.
+    :param path_to_root_dir: Path to directory that contains all the subdirectories with the results
+    :param eps_type: Determine the X-axis, 'fix' means to take the eps of the refinement and 'attack' means to take the
+                     eps of the attack.
+    """
+    search_string = path_to_root_dir + '\\*'
+    subdir_list = glob.glob(search_string, recursive=False)
+    for iter, dir in enumerate(subdir_list):
+        results_path = dir + '\\results**.json'
+        results_path = glob.glob(results_path, recursive=True)
+        assert(len(results_path) == 1)
+        _, statistics_df = load_results_to_df(results_path)
 
+        if iter == 0:
+            results_summary_df = pd.DataFrame(columns=statistics_df.index.tolist() + ['eps'])
+
+        results_summary_df = pd.concat([results_summary_df, statistics_df[['nml']].transpose()], ignore_index=True, sort=False)
+        param_path = dir + '\\params.json'
+        param_path = glob.glob(param_path, recursive=True)
+        assert(len(param_path) == 1)
+        with open(param_path[0]) as f:
+            params = json.load(f)
+
+        results_summary_df.loc[iter, 'eps'] = params['fit_to_sample']['epsilon'] if eps_type=='fix' else \
+                                              params['adv_attack_test']['epsilon']
+        print(results_path)
+
+    return results_summary_df.sort_values('eps')
 
 
 
 if __name__ == "__main__":
+    results_summary_df = create_nml_vs_eps_df('./../results/cifar/acc_vs_eps_refine/cifar_diff_fix')
     # # Example
     # json_file_name = 'results_example.json'
     json_file_name = './../output/imagenet_adversarial_results_20190725_172246/results_imagenet_adversarial_20190725_172246.json'

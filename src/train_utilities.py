@@ -228,7 +228,7 @@ class TrainClass:
         correct = 0
         with torch.no_grad():
             for iter_num, (data, labels) in enumerate(dataloader):
-                # print("iter_num: {}".format(iter_num))
+                print("iter_num: {}".format(iter_num))
                 data, labels = TorchUtils.to_device(data), TorchUtils.to_device(labels)
                 adv_data = attack.create_adversarial_sample(data, labels)
                 with torch.enable_grad():
