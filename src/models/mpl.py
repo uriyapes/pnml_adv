@@ -50,8 +50,8 @@ class PnmlMnistClassifier(MNISTClassifier):
         # self.conv2 = nn.Conv2d(32, 64, kernel_size=5)
         # self.fc1 = nn.Linear(1024, 10)
         self.clamp = (mnist_min_val, mnist_max_val)
-        self.loss_fn = torch.nn.CrossEntropyLoss(reduction='sum')
-
+        self.loss_fn = torch.nn.CrossEntropyLoss(reduction='sum')  # reduction='none' The loss is config with reduction='none' so the grad of each sample won't be effected by other samples
+        #     TODO : support larger batch sizes.
     def forward(self, x, true_label):
         # x.require_grad = True
         # x = x.detach()
@@ -76,12 +76,12 @@ class PnmlMnistClassifier(MNISTClassifier):
         x.requires_grad = True
         # x_adv.requires_grad = True
         output = self.forward_base_model(x)
-        adv_loss = self.loss_fn(output, label) #TODO : make sure the loss doesn't do mean() so grad value will be the same no matter the batch size.
-        adv_grad = torch.autograd.grad(adv_loss, x, create_graph=True, allow_unused=True)[0]
-        # adv_grad_sign = torch.sign(adv_grad)
-        adv_grad_sign = adv_grad * 500
+        adv_loss = self.loss_fn(output, label)
+        adv_grad = torch.autograd.grad(adv_loss, x, create_graph=True, allow_unused=True)[0] #TODO: remove create_graph
+        adv_grad_sign = torch.sign(adv_grad).detach()
+        # adv_grad_sign = adv_grad * 1500
         # x_genie = (x - adv_grad_sign * self.gamma)
-        x_genie = (x - adv_grad_sign * self.gamma)#.clamp(*self.clamp)
+        x_genie = (x - adv_grad_sign * self.gamma).clamp(*self.clamp)
         return self.forward_base_model(x_genie)
 
     def forward_base_model(self, x):
@@ -101,7 +101,8 @@ class PnmlMnistClassifier2(ModelTemplate):
         loss_fn = torch.nn.CrossEntropyLoss()
         log_prob = self.forward_base_model(x)
         loss = loss_fn(log_prob, true_label)
-        grad = torch.autograd.grad(loss, x, create_graph=True, allow_unused=True)[0]
+        # grad = torch.autograd.grad(loss, x, create_graph=True, allow_unused=True)[0] #Enable this to allow second order gradients
+        grad = torch.autograd.grad(loss, x)[0]
         x_adv = x + grad + torch.sign(grad) * self.eps
         x.requires_grad = False
         return self.forward_base_model(x_adv)

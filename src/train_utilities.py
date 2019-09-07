@@ -210,13 +210,17 @@ class TrainClass:
         return total_loss_in_epoch, natural_train_loss_in_ep, train_acc
 
     @classmethod
-    def __forward_pass(cls, model, images, labels):
+    def __forward_pass(cls, model, images, labels, loss_func='default'):
         outputs = model(images, labels)
-        loss = cls.criterion(outputs, labels)  # Negative log-loss
+        if loss_func == 'default':
+            loss = cls.criterion(outputs, labels)  # Negative log-loss
+        else:
+            criterion = nn.NLLLoss()
+            loss = criterion(torch.log(outputs), labels)
         return outputs, loss
 
     @classmethod
-    def eval_model(cls, model, dataloader, attack = get_attack("no_attack")):
+    def eval_model(cls, model, dataloader, attack = get_attack("no_attack"), loss_func='default'):
         """
         Evaluate the performance of the model on the train/test sets.
         :param model: the model that will be evaluated.
@@ -228,16 +232,16 @@ class TrainClass:
         correct = 0
         with torch.no_grad():
             for iter_num, (data, labels) in enumerate(dataloader):
-                print("iter_num: {}".format(iter_num))
+                print("eval_model iter_num: {}".format(iter_num))
                 data, labels = TorchUtils.to_device(data), TorchUtils.to_device(labels)
-                adv_data = attack.create_adversarial_sample(data, labels)
                 with torch.enable_grad():
-                    outputs, batch_loss = cls.__forward_pass(model, adv_data, labels)
+                    adv_data = attack.create_adversarial_sample(data, labels)
+                    outputs, batch_loss = cls.__forward_pass(model, adv_data, labels, loss_func)
                 loss += batch_loss * len(adv_data)  # loss sum for all the batch
                 _, predicted = torch.max(outputs.data, 1)
                 correct += (predicted == labels).sum().item()
                 if (predicted == labels).sum().item() == 1:
-                    print("iter_num: {}".format(iter_num))
+                    print("correct prediction in iter_num: {}".format(iter_num))
 
         acc = correct / len(dataloader.dataset)
         loss /= len(dataloader.dataset)

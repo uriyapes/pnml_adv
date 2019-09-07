@@ -100,14 +100,14 @@ def _iterative_gradient(model: Module,
         x_adv.requires_grad_(True)
         prediction = model(x_adv, y)
         loss = loss_fn(prediction, y_target if targeted else y).mean()
-        loss.backward()
-
+        # loss.backward()
+        x_adv_grad = torch.autograd.grad(loss, x_adv, create_graph=False)[0]
         with torch.no_grad():
             if step_norm == 'inf':
-                gradients = x_adv.grad.sign() * step
+                gradients = x_adv_grad.sign() * step
             else:
                 # .view() assumes batched image data as 4D tensor
-                gradients = x_adv.grad * step / x_adv.grad.view(x_adv.shape[0], -1).norm(step_norm, dim=-1)\
+                gradients = x_adv_grad * step / x_adv_grad.view(x_adv.shape[0], -1).norm(step_norm, dim=-1)\
                     .view(-1, 1, 1, 1)
 
             if targeted:

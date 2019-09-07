@@ -429,8 +429,11 @@ def create_nml_vs_eps_df(path_to_root_dir:str, eps_type:str = 'fix'):
 
         if iter == 0:
             results_summary_df = pd.DataFrame(columns=statistics_df.index.tolist() + ['eps'])
+            results_summary_erm_df = pd.DataFrame(columns=statistics_df.index.tolist() + ['eps'])
 
         results_summary_df = pd.concat([results_summary_df, statistics_df[['nml']].transpose()], ignore_index=True, sort=False)
+        results_summary_erm_df = pd.concat([results_summary_erm_df, statistics_df[['erm']].transpose()], ignore_index=True,
+                                       sort=False)
         param_path = dir + '\\params.json'
         param_path = glob.glob(param_path, recursive=True)
         assert(len(param_path) == 1)
@@ -439,9 +442,11 @@ def create_nml_vs_eps_df(path_to_root_dir:str, eps_type:str = 'fix'):
 
         results_summary_df.loc[iter, 'eps'] = params['fit_to_sample']['epsilon'] if eps_type=='fix' else \
                                               params['adv_attack_test']['epsilon']
+        results_summary_erm_df.loc[iter, 'eps'] = params['fit_to_sample']['epsilon'] if eps_type=='fix' else \
+                                              params['adv_attack_test']['epsilon']
         print(results_path)
 
-    return results_summary_df.sort_values('eps')
+    return results_summary_df.sort_values('eps'), results_summary_erm_df.sort_values('eps')
 
 
 

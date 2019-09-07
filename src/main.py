@@ -7,8 +7,8 @@ import argparse
 import torch
 torch.manual_seed(1)
 import numpy as np
-torch.backends.cudnn.deterministic = True
-torch.backends.cudnn.benchmark = False
+# torch.backends.cudnn.deterministic = True
+# torch.backends.cudnn.benchmark = False
 np.random.seed(0)
 
 
@@ -92,7 +92,7 @@ def run_experiment(experiment_h):
     # Eval performance on datasets -
     # base_train_loss, base_train_acc = TrainClass.eval_model(model_base, dataloaders['train'])
     base_train_loss, base_train_acc = -1,-1 # TODO: REMOVE
-    base_test_loss, base_test_acc = TrainClass.eval_model(model_base, dataloaders['test'])
+    base_test_loss, base_test_acc = TrainClass.eval_model(model_base, dataloaders['test'], loss_func='nll' if params_init_training["model_arch"] == 'PnmlMnistClassifier' else 'default')
     logger.info('Base model ----- [Natural-train test] loss =[%f %f] acc=[%f %f]' %
                 (base_train_loss, base_test_loss, base_train_acc, base_test_acc))
 
