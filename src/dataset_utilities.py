@@ -404,12 +404,12 @@ class CIFAR10AdversarialTest(datasets.CIFAR10):
 
         test_adv_data = torch.zeros([test_samples, 3, 32, 32])
         from utilities import plt_img
-        plt_img(self.test_data, 0)
+        plt_img(self.test_data, [0])
         for index in range(test_samples):
             # use the transform on all the testset
             img = Image.fromarray(self.test_data[index+start_idx])
             test_adv_data[index] = transform(img)
-        plt_img(test_adv_data, 0)
+        plt_img(test_adv_data, [0])
         self.test_data = test_adv_data
         self.test_labels = torch.LongTensor(self.test_labels[start_idx:end_idx+1])
 
@@ -423,7 +423,7 @@ class CIFAR10AdversarialTest(datasets.CIFAR10):
 
         self.test_data = self.test_data.to("cpu")
         self.transform = null_transform
-        plt_img(self.test_data, 0)
+        plt_img(self.test_data, [0])
 
     def __getitem__(self, index):
         """
@@ -542,10 +542,11 @@ class MnistAdversarialTest(datasets.MNIST):
         test_samples = end_idx - start_idx + 1
         grp_size = 100
         assert(test_samples % grp_size == 0)
+        plt_img_list_idx = list(range(0,5))
 
         transform_data = torch.zeros([test_samples, 1, 28, 28])
         from utilities import plt_img
-        plt_img(self.test_data, 0)
+        plt_img(self.test_data, plt_img_list_idx)
         for index in range(start_idx, end_idx+1):
             # use the transform on all the testset
             img = Image.fromarray(self.test_data[index].numpy(), mode='L')
@@ -570,7 +571,8 @@ class MnistAdversarialTest(datasets.MNIST):
             self.data = self.adv_data.to("cpu")
 
         self.transform = null_transform
-        plt_img(self.test_data, 0)
+        if attack.name != 'NoAttack':
+            plt_img(self.test_data, plt_img_list_idx, True)
 
     def __getitem__(self, index):
         """

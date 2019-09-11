@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
@@ -18,7 +19,7 @@ def plt_adv_mnist_img(testloader = None):
             plt.show()
         break
 
-def plt_img(image_batch, index=0):
+def plt_img(image_batch, index_list=[0], is_save_fig=False):
     """
     plt_img plot image_batch[index]
     :param image_batch: a 4 dimension PIL.Image /np.ndarry / torch.Tensor which represents a batch of images
@@ -26,18 +27,21 @@ def plt_img(image_batch, index=0):
     :return: 
     """
     plt.figure()
-    # convert to np image
-    if type(image_batch) == np.ndarray:
-        img = image_batch[index]
-    elif type(image_batch) == torch.Tensor:
-        # remove redundant dimension for grayscale and transform to numpy
-        img = (image_batch[index].cpu().detach().squeeze().numpy())
-    if img.shape[0] == 3:
-        img = np.moveaxis(img, (0,1,2), (2,0,1))  # Make img shape HxWxC
-        print(img.shape)
-    plt.imshow(img, cmap='gray')  #  cmap ignored if img is 3-D
-    plt.show()
-
+    gs = matplotlib.gridspec.GridSpec(len(index_list), 1)
+    for i, img_index in enumerate(index_list):
+        subplot = plt.subplot(gs[i])
+        # convert to np image
+        if type(image_batch) == np.ndarray:
+            img = image_batch[img_index]
+        elif type(image_batch) == torch.Tensor:
+            # remove redundant dimension for grayscale and transform to numpy
+            img = (image_batch[img_index].cpu().detach().squeeze().numpy())
+        if img.shape[0] == 3:
+            img = np.moveaxis(img, (0,1,2), (2,0,1))  # Make img shape HxWxC
+            print(img.shape)
+        subplot.imshow(img, cmap='gray')  #  cmap ignored if img is 3-D
+        # plt.show()
+    plt.savefig('./adv_output_images.jpg', bbox_inches=plt.tight_layout()) if is_save_fig else None
 
 class TorchUtils(ABC):
     __device__ = None

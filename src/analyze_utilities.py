@@ -133,7 +133,8 @@ def calc_statistic_from_df_single(result_df):
 
 def result_dict_to_nml_df(results_dict, is_random_labels=False, is_out_of_dist=False):
     # Initialize col of df
-    cls_keys = list(filter(lambda l: l.isdigit(), list(results_dict['0'].keys())))  # extract only the digits keys
+    first_idx = next(iter(results_dict.keys()))
+    cls_keys = list(filter(lambda l: l.isdigit(), list(results_dict[first_idx].keys())))  # extract only the digits keys
     cls_keys = [int(k) for k in cls_keys]
     df_col = [str(x) for x in range(min(cls_keys), max(cls_keys)+1)] + \
              ['true_label', 'loss', 'log_norm_factor', 'entropy']
@@ -169,7 +170,8 @@ def result_dict_to_nml_df(results_dict, is_random_labels=False, is_out_of_dist=F
 
 def result_dict_to_erm_df(results_dict, is_random_labels=False, is_out_of_dist=False):
     # Initialize columns to df
-    cls_keys = list(filter(lambda l: l.isdigit(), list(results_dict['0'].keys())))  # extract only the digits keys
+    first_idx = next(iter(results_dict.keys()))
+    cls_keys = list(filter(lambda l: l.isdigit(), list(results_dict[first_idx].keys())))  # extract only the digits keys
     cls_keys = [int(k) for k in cls_keys]
     df_col = [str(x) for x in range(min(cls_keys), max(cls_keys)+1)] + ['true_label', 'loss', 'entropy']
     erm_dict = {}
@@ -203,7 +205,8 @@ def result_dict_to_erm_df(results_dict, is_random_labels=False, is_out_of_dist=F
 
 def result_dict_to_genie_df(results_dict, is_random_labels=False):
     # Initialize columns to df
-    cls_keys = list(filter(lambda l: l.isdigit(), list(results_dict['0'].keys())))  # extract only the digits keys
+    first_idx = next(iter(results_dict.keys()))
+    cls_keys = list(filter(lambda l: l.isdigit(), list(results_dict[first_idx].keys())))  # extract only the digits keys
     cls_keys = [int(k) for k in cls_keys]
     df_col = [str(x) for x in range(min(cls_keys), max(cls_keys)+1)] + ['true_label', 'loss', 'entropy']
     genie_dict = {}
@@ -424,7 +427,11 @@ def create_nml_vs_eps_df(path_to_root_dir:str, eps_type:str = 'fix'):
     for iter, dir in enumerate(subdir_list):
         results_path = dir + '\\results**.json'
         results_path = glob.glob(results_path, recursive=True)
-        assert(len(results_path) == 1)
+        assert(len(results_path) < 2)
+        if len(results_path) == 0:
+            print("Warning: directory: " + dir + "im empty")
+            continue
+        print("Iteration {} Loading:".format(iter) + str(results_path))
         _, statistics_df = load_results_to_df(results_path)
 
         if iter == 0:
@@ -444,7 +451,22 @@ def create_nml_vs_eps_df(path_to_root_dir:str, eps_type:str = 'fix'):
                                               params['adv_attack_test']['epsilon']
         results_summary_erm_df.loc[iter, 'eps'] = params['fit_to_sample']['epsilon'] if eps_type=='fix' else \
                                               params['adv_attack_test']['epsilon']
-        print(results_path)
+
+        results_summary_df.loc[iter, 'refine_iter'] = params['fit_to_sample']['pgd_iter']
+        results_summary_df.loc[iter, 'refine_random_start'] = params['fit_to_sample']['pgd_rand_start']
+        results_summary_df.loc[iter, 'refine_restart_num'] = params['fit_to_sample']['pgd_test_restart_num']
+
+        results_summary_df.loc[iter, 'params'] = [params]# To insert dict to DF we need to put it inside list
+        results_summary_erm_df.loc[iter, 'params'] = [params]
+
+        results_summary_df.loc[iter, 'params_fix_hash'] = hash(json.dumps(params['fit_to_sample'], sort_keys=True))
+        results_summary_erm_df.loc[iter, 'params_fix_hash'] = hash(json.dumps(params['fit_to_sample'], sort_keys=True))
+
+        results_summary_df.loc[iter, 'results_path'] = results_path
+        results_summary_erm_df.loc[iter, 'results_path'] = results_path  # To insert dict to DF we need to put it inside list
+
+
+
 
     return results_summary_df.sort_values('eps'), results_summary_erm_df.sort_values('eps')
 

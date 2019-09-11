@@ -19,7 +19,7 @@ from train_utilities import freeze_model_layers
 from models.model_utils import load_pretrained_model
 from utilities import plt_img, TorchUtils
 from analyze_utilities import load_results_to_df
-TorchUtils.set_device(None)  # 'cuda' or 'cpu' or None
+TorchUtils.set_device(None)  # cuda:{gpu number} for example 'cuda:0' or 'cpu' or None
 torch.set_anomaly_enabled(True)
 """
 Example of running:
@@ -182,6 +182,9 @@ if __name__ == "__main__":
                              'parameters', type=str)
     parser.add_argument('-e', '--test_eps', default=None, help='the epsilon strength of the attack', type=float)
     parser.add_argument('-r', '--fix_eps', default=None, help='the epsilon strength of the refinement', type=float)
+    parser.add_argument('-i', '--fix_pgd_iter', default=None, help='the number of PGD iterations of the refinement', type=int)
+    parser.add_argument('-n', '--fix_pgd_restart_num', default=None, help='the number of PGD restarts where 0 means no random start',
+                        type=int)
     parser.add_argument('-o', '--output_root', default='output', help='the output directory where results will be saved', type=str)
 
     args = vars(parser.parse_args())

@@ -45,10 +45,16 @@ class Experiment:
             params['adv_attack_test']['test_end_idx'] = args['last_idx']
         if args['test_eps'] is not None:
             params['adv_attack_test']['epsilon'] = args['test_eps']  #TODO: change step size aswell
+
         if args['fix_eps'] is not None:
-            assert(params['fit_to_sample']['pgd_iter'] == 1)
             params['fit_to_sample']['epsilon'] = args['fix_eps']
-            params['fit_to_sample']['pgd_step'] = args['fix_eps']
+        if args['fix_pgd_iter'] is not None:
+            params['fit_to_sample']['pgd_iter'] = args['fix_pgd_iter']
+            params['fit_to_sample']['pgd_step'] = params['fit_to_sample']['epsilon'] / args['fix_pgd_iter']
+        if args['fix_pgd_restart_num'] is not None:
+            params['fit_to_sample']['pgd_rand_start'] = True if args['fix_pgd_restart_num'] != 0 else False
+            params['fit_to_sample']['pgd_test_restart_num'] = args['fix_pgd_restart_num'] if params['fit_to_sample']['pgd_rand_start'] else 1
+
         return params
 
     def get_params(self):
