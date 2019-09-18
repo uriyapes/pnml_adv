@@ -2,6 +2,7 @@ import torch.nn as nn
 from torch.nn import functional as F
 import torch.autograd
 from .model_utils import ModelTemplate
+from adversarial.attacks import get_attack
 
 
 class Net(ModelTemplate):
@@ -36,79 +37,88 @@ class MNISTClassifier(ModelTemplate):
         # return F.log_softmax(x, dim=1)
 
 
-
 mnist_std = 0.3081
 mean_mnist = 0.1307
 mnist_min_val = (0 - mean_mnist) / mnist_std
 mnist_max_val = (1 - mean_mnist) / mnist_std
-class PnmlMnistClassifier(MNISTClassifier):
-    def __init__(self, eps=0.3, gamma=0.1):
-        super(PnmlMnistClassifier, self).__init__()
-        self.eps = eps * (mnist_max_val - mnist_min_val)
-        self.gamma = gamma * (mnist_max_val - mnist_min_val)
-        # self.conv1 = nn.Conv2d(1, 32, kernel_size=5)
-        # self.conv2 = nn.Conv2d(32, 64, kernel_size=5)
-        # self.fc1 = nn.Linear(1024, 10)
+
+
+class PnmlMnistClassifier(ModelTemplate):
+    def __init__(self, base_model, params):
+        super().__init__()
+        self.gamma = params['epsilon'] * (mnist_max_val - mnist_min_val)
         self.clamp = (mnist_min_val, mnist_max_val)
+        self.base_model = base_model
+        self.refine = get_attack('pgd', self.base_model, self.gamma, params["pgd_iter"], params["pgd_step"], False,
+                                 self.clamp, 1)
         self.loss_fn = torch.nn.CrossEntropyLoss(reduction='sum')  # reduction='none' The loss is config with reduction='none' so the grad of each sample won't be effected by other samples
         #     TODO : support larger batch sizes.
-    def forward(self, x, true_label):
-        # x.require_grad = True
-        # x = x.detach()
 
-        # x.requires_grad = True
-        # log_prob = self.forward_base_model(x)
-        # loss = self.loss_fn(log_prob, true_label)
-        # grad = torch.autograd.grad(loss, x, create_graph=True, allow_unused=True)[0]
-        # x_adv = x + grad + torch.sign(grad) * self.eps
-        # x.requires_grad = False
+    def forward(self, x, true_label):
         num_classes = 10
         genie_prob = torch.zeros([x.shape[0], num_classes], requires_grad=True).to(x.device)
         for label in range(num_classes):
             torch_label = torch.ones([x.shape[0]], dtype=torch.long).to(x.device) * label
             genie_prob[:, label] = F.softmax(self.forward_genie(x, torch_label), dim=1)[:, label]
-        pnml_prob = genie_prob / genie_prob.sum(dim =1, keepdim=True)
+        pnml_prob = genie_prob / genie_prob.sum(dim=1, keepdim=True)
         # assert(torch.allclose(pnml_prob.sum(dim=1), ))
         return pnml_prob
 
     def forward_genie(self, x, label):
-        # x = x.clone()
+        # x.requires_grad = True
+        x_genie = self.refine.create_adversarial_sample(x, None, label)
+        return self.forward_base_model(x_genie)
+
+    def forward_genie_sign_approx(self, x, label):
         x.requires_grad = True
-        # x_adv.requires_grad = True
         output = self.forward_base_model(x)
         adv_loss = self.loss_fn(output, label)
         adv_grad = torch.autograd.grad(adv_loss, x, create_graph=True, allow_unused=True)[0] #TODO: remove create_graph
-        adv_grad_sign = torch.sign(adv_grad).detach()
-        # adv_grad_sign = adv_grad * 1500
-        # x_genie = (x - adv_grad_sign * self.gamma)
-        x_genie = (x - adv_grad_sign * self.gamma).clamp(*self.clamp)
+        adv_grad_sign = adv_grad * 1500
+        x_genie = (x - adv_grad_sign * self.gamma)
         return self.forward_base_model(x_genie)
 
     def forward_base_model(self, x):
-        return super(PnmlMnistClassifier, self).forward(x)
+        return self.base_model(x)
 
 
-class PnmlMnistClassifier2(ModelTemplate):
-    def __init__(self, base_model, eps=0.3):
-        super(PnmlMnistClassifier2, self).__init__()
-        self.eps = eps * (mnist_max_val - mnist_min_val)
-        self.base_model = base_model
+class PnmlMnistClassifier2(MNISTClassifier):
+    def __init__(self, params, gamma=0.1):
+        super().__init__()
+        self.gamma = params['epsilon'] * (mnist_max_val - mnist_min_val)
+        self.clamp = (mnist_min_val, mnist_max_val)
+        self.base_model = MNISTClassifier()
+        self.refine = get_attack('pgd', self.base_model, self.gamma, params["pgd_iter"], params["pgd_step"], params["pgd_rand_start"],
+                                 self.clamp, params['pgd_test_restart_num'])
+        self.loss_fn = torch.nn.CrossEntropyLoss(reduction='sum')  # reduction='none' The loss is config with reduction='none' so the grad of each sample won't be effected by other samples
+        #     TODO : support larger batch sizes.
 
     def forward(self, x, true_label):
-        # x.require_grad = True
-        # x = x.detach()
+        num_classes = 10
+        genie_prob = torch.zeros([x.shape[0], num_classes], requires_grad=True).to(x.device)
+        for label in range(num_classes):
+            torch_label = torch.ones([x.shape[0]], dtype=torch.long).to(x.device) * label
+            genie_prob[:, label] = F.softmax(self.forward_genie(x, torch_label), dim=1)[:, label]
+        pnml_prob = genie_prob / genie_prob.sum(dim=1, keepdim=True)
+        # assert(torch.allclose(pnml_prob.sum(dim=1), ))
+        return pnml_prob
+
+    def forward_genie(self, x, label):
         x.requires_grad = True
-        loss_fn = torch.nn.CrossEntropyLoss()
-        log_prob = self.forward_base_model(x)
-        loss = loss_fn(log_prob, true_label)
-        # grad = torch.autograd.grad(loss, x, create_graph=True, allow_unused=True)[0] #Enable this to allow second order gradients
-        grad = torch.autograd.grad(loss, x)[0]
-        x_adv = x + grad + torch.sign(grad) * self.eps
-        x.requires_grad = False
-        return self.forward_base_model(x_adv)
+        x_genie = self.refine.create_adversarial_sample(x, None, label)
+        return self.forward_base_model(x_genie)
+
+    def forward_genie_sign_approx(self, x, label):
+        x.requires_grad = True
+        output = self.forward_base_model(x)
+        adv_loss = self.loss_fn(output, label)
+        adv_grad = torch.autograd.grad(adv_loss, x, create_graph=True, allow_unused=True)[0] #TODO: remove create_graph
+        adv_grad_sign = adv_grad * 1500
+        x_genie = (x - adv_grad_sign * self.gamma)
+        return self.forward_base_model(x_genie)
 
     def forward_base_model(self, x):
-        return self.base_model(x)
+        return super().forward(x)
 
 
 class Net_800_400_100(ModelTemplate):

@@ -96,15 +96,16 @@ def _iterative_gradient(model: Module,
         # The other option (original) is to work with temp variable _x_adv (see below) but it seems to prelong the
         # calculation time maybe as a result of re-cloning
         # _x_adv = x_adv.clone().detach().requires_grad_(True)
-        x_adv = x_adv.detach()
+        x_adv = x_adv
         x_adv.requires_grad_(True)
         prediction = model(x_adv, y)
         loss = loss_fn(prediction, y_target if targeted else y).mean()
         # loss.backward()
+        # x_adv_grad = x_adv.grad
         x_adv_grad = torch.autograd.grad(loss, x_adv, create_graph=False)[0]
         with torch.no_grad():
             if step_norm == 'inf':
-                gradients = x_adv_grad.sign() * step
+                gradients = (x_adv_grad.sign() * step).detach()
             else:
                 # .view() assumes batched image data as 4D tensor
                 gradients = x_adv_grad * step / x_adv_grad.view(x_adv.shape[0], -1).norm(step_norm, dim=-1)\
@@ -122,7 +123,7 @@ def _iterative_gradient(model: Module,
 
         # Project back into l_norm ball and correct range
         x_adv = project(x, x_adv, norm, eps).clamp(*clamp)
-    x_adv = x_adv.detach()
+    # x_adv = x_adv.detach()
     prediction = model(x_adv, y)
     adv_loss = loss_fn(prediction, y_target if targeted else y)
     x_adv.requires_grad_ = False

@@ -544,7 +544,7 @@ class MnistAdversarialTest(datasets.MNIST):
         assert(test_samples % grp_size == 0)
         plt_img_list_idx = list(range(0,5))
 
-        transform_data = torch.zeros([test_samples, 1, 28, 28])
+        transform_data = torch.zeros([10000, 1, 28, 28])
         from utilities import plt_img
         plt_img(self.test_data, plt_img_list_idx)
         for index in range(start_idx, end_idx+1):
@@ -552,19 +552,22 @@ class MnistAdversarialTest(datasets.MNIST):
             img = Image.fromarray(self.test_data[index].numpy(), mode='L')
             transform_data[index] = transform(img)
 
-        self.adv_data = transform_data
+        self.adv_data = transform_data.clone()
         device = TorchUtils.get_device()
-        for index in range(int(test_samples / grp_size)):
+        assert(start_idx % grp_size == 0)
+        assert ((end_idx+1) % grp_size == 0)
+        for index in range(int(start_idx/grp_size), int((end_idx+1) / grp_size)):
             print(index)
             # save the adversarial testset
             self.adv_data[index*grp_size:(index+1)*grp_size] = attack.create_adversarial_sample(
                                                 self.adv_data[index*grp_size:(index+1)*grp_size].to(device),
-                                                self.test_labels[index*grp_size:(index+1)*grp_size].to(device))
+                                                self.test_labels[index*grp_size:(index+1)*grp_size].to(device)).detach()
 
 
         """
         This method is pytorch version agnostic which returns the data buffer. 
         """
+        # print(calc_norm(transform_data, self.adv_data.to("cpu")))
         if torch.__version__ == '0.4.1':
             self.test_data = self.adv_data.to("cpu")
         else:
@@ -590,6 +593,20 @@ class MnistAdversarialTest(datasets.MNIST):
         img = self.adv_data[index]
         return img, target
 
+
+def calc_norm(original_data, adv_data):
+    """
+    calc_norm: calculate L1 and L2 norms of ||original_data - adv_data||
+    :param original_data:
+    :param adv_data:
+    :return:
+    """
+    diff = original_data - adv_data
+    l2_norm = diff.view(diff.shape[0], -1).norm(p=2, dim=-1)
+    l1_norm = diff.view(diff.shape[0], -1).norm(p=1, dim=-1)
+    l_inf_norm = diff.view(diff.shape[0], -1).norm(p=float('inf'), dim=-1)
+    print("l_inf_norm: %.3f  l2_norm: %.3f l1_norm: %.3f" % (l_inf_norm.mean(), l2_norm.mean(), l1_norm.mean()))
+    return l_inf_norm, l2_norm, l1_norm
 
 def create_adv_mnist_test_dataloader_preprocessed(attack, data_dir: str = './data', batch_size: int = 128,
                                                   num_workers: int = 4, start_idx: int = 0, end_idx: int = 9999):

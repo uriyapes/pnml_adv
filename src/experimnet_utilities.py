@@ -168,10 +168,14 @@ class Experiment:
             elif model_arch == 'MNISTClassifier':
                 model = MNISTClassifier()
             elif model_arch == 'PnmlMnistClassifier':
-                model = PnmlMnistClassifier()
+                model = MNISTClassifier()
             else:
                 raise NameError('No model_arch type %s for %s experiment' % (str(model_arch), self.exp_type))
             model = load_pretrained_model(model, ckpt_path) if ckpt_path is not None else model
+
+            if model_arch == 'PnmlMnistClassifier':
+                model = PnmlMnistClassifier(model, self.params['fit_to_sample'])
+
         elif self.exp_type == "cifar_adversarial":
             if model_arch == 'wide_resnet':
                 model = MadryWideResNet(depth=34, num_classes=10, widen_factor=10, dropRate=0.0)

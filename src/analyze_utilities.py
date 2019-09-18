@@ -121,6 +121,107 @@ def load_results_to_df(files, is_random_labels=False, is_out_of_dist=False, idx=
     return result_df, statistic_df
 
 
+def comb_erm_nml_df_by_risk(erm_df, nml_df, risk_th):
+    """
+    comb_erm_nml_results_by_risk - takes two DF and combine them , element-wise, according to the risk. If the risk of a
+    certain sample is smaller than risk_th then nml probabilities are used, else the normal probabilities (erm) are used.
+    :param erm_df: DF containing the normal model probabilities.
+    :param nml_df: DF containing the probabilities of pNML
+    :param risk_th: The risk threshold
+    :return: The combined Dataframe
+    """
+    assert(pd.Series(nml_df.index.values == erm_df.index.values).all())  # Make sure index are aligned.
+
+    # Make sure both DF have the same column names
+    # comb_df = nml_df.rename(columns=lambda x: x.replace("nml", "comb"))
+    # erm_df = erm_df.rename(columns=lambda x: x.replace("erm", "comb"))
+    comb_df = nml_df.copy()
+    col = list(erm_df.columns)
+    use_erm_idx = nml_df.log_norm_factor > risk_th
+    comb_df.loc[use_erm_idx, col] = erm_df.loc[use_erm_idx, col]
+    return comb_df
+
+
+def find_optimal_risk_th_for_comb_df(files, min_risk_th:float = -0.1, max_risk_th:float = 1.1, risk_th_steps:int=30, idx=None):
+    """
+    find_optimal_risk_th_for_comb_df - create multiple number of combinations between erm and nml df according to the risk.
+    :param files: the result files that contains the model accuracy
+    :param risk_th_steps: the number of risk thresholds to test
+    :param idx: the indexs to analyze in the dataframe, if no value is given all indexs are analyzed.
+    :return:
+    """
+    results_dict = load_dict_from_file_list(files)
+
+    # NML
+    pnml_df = result_dict_to_nml_df(results_dict)
+    if idx is None: # if not idx is given (empty set) then take all the indexes
+        idx = pnml_df.index.values
+    else:
+        idx = set(idx)
+    statistic_pnml_df = calc_statistic_from_df_single(pnml_df.loc[idx]).rename(columns={'statistics': 'nml'})
+    # pnml_df = pnml_df.add_prefix('nml_')
+    # pnml_df = pnml_df.rename(columns={'nml_log_norm_factor': 'log_norm_factor'})
+
+    # ERM
+    erm_df = result_dict_to_erm_df(results_dict)
+    statistic_erm_df = calc_statistic_from_df_single(erm_df.loc[idx]).rename(columns={'statistics': 'erm'})
+    # erm_df = erm_df.add_prefix('erm_')
+    # max_risk, min_risk = max(pnml_df.log_norm_factor), min(pnml_df.log_norm_factor)
+    risk_th_arr = np.arange(min_risk_th, max_risk_th, float(max_risk_th - min_risk_th)/risk_th_steps)
+    statistics_df = pd.DataFrame(columns=['acc', 'mean loss', 'std loss', 'mean entropy', 'risk_th'])
+    for iter, risk in enumerate(risk_th_arr):
+        comb_df = comb_erm_nml_df_by_risk(erm_df, pnml_df, risk)
+        statistic_line_name = 'comb_{}'.format(iter)
+        statistic_comb_df = calc_statistic_from_df_single(comb_df.loc[idx]).rename(columns={'statistics': statistic_line_name})
+        statistic_comb_df = statistic_comb_df.transpose()
+        statistic_comb_df['risk_th'] = risk
+        statistics_df = pd.concat([statistics_df, statistic_comb_df], ignore_index=False, sort=False)
+    # statistics_df = pd.concat([statistics_df, statistic_erm_df.transpose(), statistic_pnml_df.transpose()], ignore_index=False, sort=False)
+    max_acc = max(statistics_df.acc)
+
+    print("maximum accuracy is: {}\n {}".format(max_acc, statistics_df.loc[statistics_df.acc == max_acc]))
+    return statistics_df
+
+
+def create_adv_detector_df(result_df, risk_th, adv_dataset_flag=True, idx=None):
+    """
+    create_adv_detector_df - gets result_df and by using the risk detects misclassified samples, the misclassification
+    could be a result of wrong classification of natural or adversarial image. In case the detected sample is truly wrong
+    (TN - true negative) the sample is saved as correctly classified. In case the detected sample was classified correctly
+    then the detector reclassifiy it as incorrect.
+    The detection is performed by examining the risk of each sample, if the risk is higher than the risk_th then the sample
+    is considered wrongly classified.
+    :param result_df: a dataframe containing the results
+    :param risk_th: the risk threshold, samples with higher risk than this value are detected as wrongly classified.
+    :param idx: the indexs to analyze in the dataframe, if no value is given all indexs are analyzed.
+    :param adv_dataset_flag: indicates whether the dataset is adversarial or natural
+    :return: A statistics dataframe after the reclassification according to the risk
+    """
+    if idx is None: # if not idx is given (empty set) then take all the indexes
+        idx = result_df.index.values
+    else:
+        idx = set(idx)
+    result_df = pd.DataFrame.copy(result_df.loc[idx], deep=True)
+    detected_idx = result_df['log_norm_factor'] > risk_th
+    positive_dected_idx = (result_df['log_norm_factor'] > risk_th) & (result_df['is_correct'] == False)
+    if adv_dataset_flag:
+        TP = len(result_df.loc[detected_idx])
+        FN = len(idx) - TP
+        TPSA = len(result_df.loc[positive_dected_idx])
+        # print(TP,FN, TPSA)
+        result_df.loc[detected_idx, "is_correct"] = True
+    else:
+        FP = len(result_df.loc[detected_idx])
+        TN = len(idx) - FP
+        # print(TN, FP)
+        result_df.loc[detected_idx, "is_correct"] = False
+        # result_df.loc[detected_idx, "is_correct"] = ~result_df.loc[detected_idx, "is_correct"] # ~ is element-wise NOT operator, correct become incorrect in vice versa
+
+    statistic_adv_detector_df = calc_statistic_from_df_single(result_df.loc[idx]).rename(columns={'statistics': 'acc'})
+    statistic_adv_detector_df.loc["risk_th"] = risk_th
+    return statistic_adv_detector_df
+
+
 def calc_statistic_from_df_single(result_df):
     mean_loss, std_loss = result_df['loss'].mean(), result_df['loss'].std()
     acc = result_df['is_correct'].sum() / result_df.shape[0]
@@ -471,11 +572,101 @@ def create_nml_vs_eps_df(path_to_root_dir:str, eps_type:str = 'fix'):
     return results_summary_df.sort_values('eps'), results_summary_erm_df.sort_values('eps')
 
 
+def find_path_to_same_param_file(path_to_result_dir, look_at_path, fix_params_comparison=['epsilon']):
+    """
+    find_path_to_same_param_file - get a path to a result directory, extracts the parameters used in this experiment,
+    and look at look_at_path for a similiar param file according to fix_params_comparison list of parameters to compare.
+    :param path_to_result_dir: the directory containing a param file. The the function looks for similiar param files to that one.
+    :param look_at_path: Where to look for similiar param files.
+    :param fix_params_comparison: A list of strings representing the param keys that are used for comparison
+    :return: a path to results.json which is inside directory containing the a similiar param file, None if nothing is found
+    """
+    param_path = path_to_result_dir + '\\params.json'
+    param_path = glob.glob(param_path, recursive=False)
+    assert(len(param_path) == 1)
+    with open(param_path[0]) as f:
+        params = json.load(f)
+
+    search_string = look_at_path + '\\*'
+    subdir_list = glob.glob(search_string, recursive=False)
+    for iter, dir in enumerate(subdir_list):
+        # Make sure the dir isn't empty
+        results_path = dir + '\\results**.json'
+        results_path = glob.glob(results_path, recursive=False)
+        assert(len(results_path) < 2)
+        if len(results_path) == 0:
+            print("Warning: directory: " + dir + "im empty")
+            continue
+
+        # Extract param file
+        param_path = dir + '\\params.json'
+        param_path = glob.glob(param_path, recursive=False)
+        assert(len(param_path) == 1)
+        with open(param_path[0]) as f:
+            params_to_compare = json.load(f)
+
+        # Compare params according to key list fix_params_comparison
+        identical_flag = True
+        for key in fix_params_comparison:
+            print("Dir: {} No match eps1: {} eps2: {}".format(dir, params['fit_to_sample'][key],
+                                                              params_to_compare['fit_to_sample'][key]))
+            if params['fit_to_sample'][key] != params_to_compare['fit_to_sample'][key]:
+                identical_flag = False
+
+        if identical_flag:
+            return results_path
+        else:
+            results_path = None
+
+    return results_path
+
+
+def create_list_of_corresponding_results_by_params(path1, path2, fix_params_comparison=['epsilon']):
+    """
+
+    :param path1:
+    :param path2:
+    :param fix_params_comparison:
+    :return:
+    """
+    search_string = path1 + '\\*'
+    subdir_list = glob.glob(search_string, recursive=False)
+    print(subdir_list)
+    results_l = []
+    corresponding_results_l = []
+    for iter, dir in enumerate(subdir_list):
+        # Make sure directory isn't empty
+        print("iteration {}".format(iter))
+        results_path = dir + '\\results**.json'
+        results_path = glob.glob(results_path, recursive=True)
+        assert (len(results_path) < 2)
+        if len(results_path) == 0:
+            print("Warning: directory: " + dir + "im empty")
+            continue
+
+        corresponding_result_path = find_path_to_same_param_file(dir, path2, fix_params_comparison)
+        if corresponding_result_path is not None:
+            results_l.append(results_path[0])
+            corresponding_results_l.append(corresponding_result_path[0])
+        else:
+            print("Warning: directory: " + dir + "didn't find a corresponding directory")
+
+    return results_l, corresponding_results_l
+
+
+
+
 
 if __name__ == "__main__":
-    results_summary_df = create_nml_vs_eps_df('./../results/cifar/acc_vs_eps_refine/cifar_diff_fix')
-    # # Example
-    # json_file_name = 'results_example.json'
+    json_file_name = './../results/paper/MNIST/mnist_adversarial_results_20190802_151544/results_mnist_adversarial_20190802_151544.json'
+    # comb_df_statistics = find_optimal_risk_th_for_comb_df([json_file_name])
+    # print(comb_df_statistics)
+    results_dict = load_dict_from_file_list([json_file_name])
+    results_df_natural = result_dict_to_nml_df(results_dict)
+    statistics_detector = create_adv_detector_df(results_df_natural, 0.2)
+
+    # results_summary_df = create_nml_vs_eps_df('./../results/cifar/acc_vs_eps_refine/cifar_diff_fix')
+
     json_file_name = './../output/imagenet_adversarial_results_20190725_172246/results_imagenet_adversarial_20190725_172246.json'
     json_file_name = os.path.join('.', json_file_name)
     # with open(json_file_name) as data_file:
