@@ -608,8 +608,6 @@ def find_path_to_same_param_file(path_to_result_dir, look_at_path, fix_params_co
         # Compare params according to key list fix_params_comparison
         identical_flag = True
         for key in fix_params_comparison:
-            print("Dir: {} No match eps1: {} eps2: {}".format(dir, params['fit_to_sample'][key],
-                                                              params_to_compare['fit_to_sample'][key]))
             if params['fit_to_sample'][key] != params_to_compare['fit_to_sample'][key]:
                 identical_flag = False
 
@@ -618,6 +616,7 @@ def find_path_to_same_param_file(path_to_result_dir, look_at_path, fix_params_co
         else:
             results_path = None
 
+    print("No match in directory: {} for eps1: {}".format(dir, params['fit_to_sample'][key]))
     return results_path
 
 
@@ -631,12 +630,12 @@ def create_list_of_corresponding_results_by_params(path1, path2, fix_params_comp
     """
     search_string = path1 + '\\*'
     subdir_list = glob.glob(search_string, recursive=False)
-    print(subdir_list)
+    # print(subdir_list)
     results_l = []
     corresponding_results_l = []
     for iter, dir in enumerate(subdir_list):
         # Make sure directory isn't empty
-        print("iteration {}".format(iter))
+        # print("iteration {}".format(iter))
         results_path = dir + '\\results**.json'
         results_path = glob.glob(results_path, recursive=True)
         assert (len(results_path) < 2)

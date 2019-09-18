@@ -24,6 +24,7 @@ class Net(ModelTemplate):
 class MNISTClassifier(ModelTemplate):
     def __init__(self):
         super(MNISTClassifier, self).__init__()
+        self.regularization = torch.zeros([1]).to("cuda")
         self.conv1 = nn.Conv2d(1, 32, kernel_size=5)
         self.conv2 = nn.Conv2d(32, 64, kernel_size=5)
         self.fc1 = nn.Linear(1024, 10)
@@ -53,6 +54,7 @@ class PnmlMnistClassifier(ModelTemplate):
                                  self.clamp, 1)
         self.loss_fn = torch.nn.CrossEntropyLoss(reduction='sum')  # reduction='none' The loss is config with reduction='none' so the grad of each sample won't be effected by other samples
         #     TODO : support larger batch sizes.
+        self.regularization = torch.zeros([1])  # This value stores the risk
 
     def forward(self, x, true_label):
         num_classes = 10
@@ -61,6 +63,8 @@ class PnmlMnistClassifier(ModelTemplate):
             torch_label = torch.ones([x.shape[0]], dtype=torch.long).to(x.device) * label
             genie_prob[:, label] = F.softmax(self.forward_genie(x, torch_label), dim=1)[:, label]
         pnml_prob = genie_prob / genie_prob.sum(dim=1, keepdim=True)
+        risk = genie_prob.sum(dim=1, keepdim=False)
+        self.regularization = 1.0/risk
         # assert(torch.allclose(pnml_prob.sum(dim=1), ))
         return pnml_prob
 
