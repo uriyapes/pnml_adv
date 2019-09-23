@@ -203,14 +203,17 @@ def create_adv_detector_df(result_df, risk_th, adv_dataset_flag=True, idx=None):
         idx = set(idx)
     result_df = pd.DataFrame.copy(result_df.loc[idx], deep=True)
     detected_idx = result_df['log_norm_factor'] > risk_th
-    positive_dected_idx = (result_df['log_norm_factor'] > risk_th) & (result_df['is_correct'] == False)
+    positive_detcted_idx = (result_df['log_norm_factor'] > risk_th) & (result_df['is_correct'] == False)
     if adv_dataset_flag:
         TP = len(result_df.loc[detected_idx])
         FN = len(idx) - TP
-        TPSA = len(result_df.loc[positive_dected_idx])
+        TPSA = len(result_df.loc[positive_detcted_idx])
+        FP = 0
         # print(TP,FN, TPSA)
         result_df.loc[detected_idx, "is_correct"] = True
     else:
+        correct_fp_idx = (result_df['log_norm_factor'] > risk_th) & (result_df['is_correct'] == True)
+        CFP = len(result_df.loc[correct_fp_idx])  # correct false-positive , measures how many correct samples are detected
         FP = len(result_df.loc[detected_idx])
         TN = len(idx) - FP
         # print(TN, FP)
@@ -219,6 +222,8 @@ def create_adv_detector_df(result_df, risk_th, adv_dataset_flag=True, idx=None):
 
     statistic_adv_detector_df = calc_statistic_from_df_single(result_df.loc[idx]).rename(columns={'statistics': 'acc'})
     statistic_adv_detector_df.loc["risk_th"] = risk_th
+    statistic_adv_detector_df.loc["FPR"] = float(FP) / len(idx)
+
     return statistic_adv_detector_df
 
 
