@@ -159,7 +159,7 @@ class Experiment:
         :param ckpt_path: the path to the model .ckpt file. If no ckpt_path is given then the initial model is loaded
         :return:
         """
-        ckpt_path = None if ckpt_path is "None" else ckpt_path
+        ckpt_path = None if ckpt_path == "None" else ckpt_path
         if self.exp_type == "mnist_adversarial":
             if model_arch == 'Net':
                 model = Net()

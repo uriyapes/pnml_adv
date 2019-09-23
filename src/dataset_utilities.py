@@ -564,6 +564,8 @@ class MnistAdversarialTest(datasets.MNIST):
                                                 self.test_labels[index*grp_size:(index+1)*grp_size].to(device)).detach()
 
 
+        # TODO: notice that all the 10000 samples are copied into test_data, this is done to keep the order of the idxs so during pNML the correct idxs are called but when evaluating the DS (without pNML) the result is incorrect
+
         """
         This method is pytorch version agnostic which returns the data buffer. 
         """
