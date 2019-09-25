@@ -74,7 +74,8 @@ class PGD(Attack):
                  random: bool,
                  clamp: Tuple[float, float] = (0, 1),
                  norm: Union[str, int] = 'inf',
-                 restart_num: int = 1):
+                 restart_num: int = 1,
+                 beta=0.0075):
         super(PGD, self).__init__()
         self.name = self.__class__.__name__
         self.model = model
@@ -87,13 +88,14 @@ class PGD(Attack):
         self.step = step * (self.clamp[1] - self.clamp[0])
         self.eps = self.eps_ratio * (self.clamp[1] - self.clamp[0])
         self.restart_num = restart_num
+        self.beta = beta
 
     def create_adversarial_sample(self,
                                   x: torch.Tensor,
                                   y: torch.Tensor,
                                   y_target: torch.Tensor = None) -> torch.Tensor:
         return iterated_fgsm(self.model, x, y, self.loss_fn, self.k, self.step, self.eps, self.norm, y_target=y_target,
-                             random=self.random, clamp=self.clamp, restart_num=self.restart_num)
+                             random=self.random, clamp=self.clamp, restart_num=self.restart_num, beta=self.beta)
 
 
 class Boundary(Attack):
@@ -128,13 +130,13 @@ class Boundary(Attack):
 
 def get_attack(attack_type: str, model: Module = None, eps: float = 0.3, iter: int = 30, step_size: float = 0.01,
                 random: bool = True, clamp: Tuple[float, float] = (0, 1), restart_num: int = 1,
-                loss_fn: Callable = torch.nn.CrossEntropyLoss):
+                loss_fn: Callable = torch.nn.CrossEntropyLoss, beta=0.0075):
     if attack_type == 'no_attack':
         attack = NoAttack()
     elif attack_type == 'fgsm':
         attack = FGSM(model, loss_fn, eps, clamp)
     elif attack_type == 'pgd':
-        attack = PGD(model, loss_fn, eps, iter, step_size, random, clamp, 'inf', restart_num)
+        attack = PGD(model, loss_fn, eps, iter, step_size, random, clamp, 'inf', restart_num, beta)
     else:
         raise NameError('No attack named %s' % attack_type)
 

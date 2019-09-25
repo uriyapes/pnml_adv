@@ -451,7 +451,7 @@ def execute_pnml_adv_fix(pnml_params: dict, params_init_training: dict, dataload
         # Evaluate with base model
         assert(not model.training)
         x_refine = refinement.create_adversarial_sample(sample_test_data_trans, true_label_expand, fix_label_expand)
-        assert(sample_test_data_trans.grad is None)
+        # assert(sample_test_data_trans.grad is None)
         prob, pred = eval_single_sample(model, x_refine)
 
         global execute_pnml_adv_fix_ind

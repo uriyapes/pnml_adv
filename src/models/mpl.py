@@ -50,7 +50,7 @@ class PnmlMnistClassifier(ModelTemplate):
         self.gamma = params['epsilon'] * (mnist_max_val - mnist_min_val)
         self.clamp = (mnist_min_val, mnist_max_val)
         self.base_model = base_model
-        self.refine = get_attack('pgd', self.base_model, self.gamma, params["pgd_iter"], params["pgd_step"], False,
+        self.refine = get_attack("pgd", self.base_model, self.gamma, params["pgd_iter"], params["pgd_step"], False,
                                  self.clamp, 1)
         self.loss_fn = torch.nn.CrossEntropyLoss(reduction='sum')  # reduction='none' The loss is config with reduction='none' so the grad of each sample won't be effected by other samples
         #     TODO : support larger batch sizes.

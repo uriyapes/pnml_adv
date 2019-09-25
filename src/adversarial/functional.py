@@ -59,7 +59,8 @@ def _iterative_gradient(model: Module,
                         step_norm: Union[str, float],
                         y_target: torch.Tensor = None,
                         random: bool = False,
-                        clamp: Tuple[float, float] = (0, 1)) -> Tuple[torch.Tensor, int]:
+                        clamp: Tuple[float, float] = (0, 1),
+                        beta=0.0075) -> Tuple[torch.Tensor, int]:
     """Base function for PGD and iterated FGSM
 
     Args:
@@ -99,7 +100,7 @@ def _iterative_gradient(model: Module,
         x_adv = x_adv
         x_adv.requires_grad_(True)
         prediction = model(x_adv, y)
-        loss = loss_fn(prediction, y_target if targeted else y).mean() + 0.5 * model.regularization.mean()
+        loss = loss_fn(prediction, y_target if targeted else y).mean() - beta*torch.log(model.regularization.mean())#+ 0.5 * model.regularization.mean() TODO: uncomment
         # loss.backward()
         # x_adv_grad = x_adv.grad
         x_adv_grad = torch.autograd.grad(loss, x_adv, create_graph=False)[0]
@@ -123,7 +124,8 @@ def _iterative_gradient(model: Module,
 
         # Project back into l_norm ball and correct range
         x_adv = project(x, x_adv, norm, eps).clamp(*clamp)
-    # x_adv = x_adv.detach()
+    x_adv = x_adv
+    # x_adv.requires_grad_(True) #  This is done so model with refinement could do backprop
     prediction = model(x_adv, y)
     adv_loss = loss_fn(prediction, y_target if targeted else y)
     x_adv.requires_grad_ = False
@@ -142,7 +144,8 @@ def iterated_fgsm(model: Module,
                   y_target: torch.Tensor = None,
                   random: bool = False,
                   clamp: Tuple[float, float] = (0, 1),
-                  restart_num: int = 1) -> torch.Tensor:
+                  restart_num: int = 1,
+                  beta = 0.0075) -> torch.Tensor:
     """Creates an adversarial sample using the iterated Fast Gradient-Sign Method
 
     This is a white-box attack.
@@ -178,7 +181,7 @@ def iterated_fgsm(model: Module,
     loss_fn = loss_fn(reduction='none')
     for i in range(restart_num):
         x_adv, loss = _iterative_gradient(model=model, x=x, y=y, loss_fn=loss_fn, k=k, eps=eps, norm=norm, step=step,
-                                   step_norm='inf', y_target=y_target, random=random, clamp=clamp)
+                                   step_norm='inf', y_target=y_target, random=random, clamp=clamp, beta=beta)
         x_adv_l.append(x_adv)
         loss_l.append(loss)
         # print("loss in iter{}:".format(i) + str(loss))

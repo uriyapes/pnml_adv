@@ -90,7 +90,7 @@ def load_dict_from_file_list(files):
     return result_dict
 
 
-def load_results_to_df(files, is_random_labels=False, is_out_of_dist=False, idx=None):
+def load_results_to_df(files, is_random_labels=False, is_out_of_dist=False, idx=None, flag_concat_results_df=True):
     results_dict = load_dict_from_file_list(files)
 
     # NML
@@ -99,6 +99,7 @@ def load_results_to_df(files, is_random_labels=False, is_out_of_dist=False, idx=
         idx = pnml_df.index.values
     else:
         idx = set(idx)
+        pnml_df = pnml_df.loc[idx] #TODO : fix for all DF
     statistic_pnml_df = calc_statistic_from_df_single(pnml_df.loc[idx]).rename(columns={'statistics': 'nml'})
     pnml_df = pnml_df.add_prefix('nml_')
     pnml_df = pnml_df.rename(columns={'nml_log_norm_factor': 'log_norm_factor'})
@@ -118,7 +119,10 @@ def load_results_to_df(files, is_random_labels=False, is_out_of_dist=False, idx=
     # Merge and return
     result_df = pd.concat([pnml_df, erm_df, genie_df], axis=1)
     statistic_df = pd.concat([statistic_pnml_df, statistic_erm_df, statistic_genie_df], axis=1)
-    return result_df, statistic_df
+    if flag_concat_results_df:
+        return result_df, statistic_df
+    else:
+        return pnml_df, erm_df, genie_df, statistic_df
 
 
 def comb_erm_nml_df_by_risk(erm_df, nml_df, risk_th):
@@ -521,6 +525,7 @@ def find_results_in_path(path_to_folder:str):
     pathname = path_to_folder + '/**/results*.json'
     return glob.glob(pathname,  recursive=True)
 
+
 def create_nml_vs_eps_df(path_to_root_dir:str, eps_type:str = 'fix'):
     """
     Plot a graph of Accuracy as a function of epsilon.
@@ -531,61 +536,77 @@ def create_nml_vs_eps_df(path_to_root_dir:str, eps_type:str = 'fix'):
     search_string = path_to_root_dir + '\\*'
     subdir_list = glob.glob(search_string, recursive=False)
     for iter, dir in enumerate(subdir_list):
-        results_path = dir + '\\results**.json'
-        results_path = glob.glob(results_path, recursive=True)
-        assert(len(results_path) < 2)
-        if len(results_path) == 0:
-            print("Warning: directory: " + dir + "im empty")
+        statistics_df = load_results_to_df_with_params(dir, eps_type)
+        if statistics_df is None:
             continue
-        print("Iteration {} Loading:".format(iter) + str(results_path))
-        _, statistics_df = load_results_to_df(results_path)
-
         if iter == 0:
-            results_summary_df = pd.DataFrame(columns=statistics_df.index.tolist() + ['eps'])
-            results_summary_erm_df = pd.DataFrame(columns=statistics_df.index.tolist() + ['eps'])
-
-        results_summary_df = pd.concat([results_summary_df, statistics_df[['nml']].transpose()], ignore_index=True, sort=False)
-        results_summary_erm_df = pd.concat([results_summary_erm_df, statistics_df[['erm']].transpose()], ignore_index=True,
-                                       sort=False)
-        param_path = dir + '\\params.json'
-        param_path = glob.glob(param_path, recursive=True)
-        assert(len(param_path) == 1)
-        with open(param_path[0]) as f:
-            params = json.load(f)
-
-        results_summary_df.loc[iter, 'eps'] = params['fit_to_sample']['epsilon'] if eps_type=='fix' else \
-                                              params['adv_attack_test']['epsilon']
-        results_summary_erm_df.loc[iter, 'eps'] = params['fit_to_sample']['epsilon'] if eps_type=='fix' else \
-                                              params['adv_attack_test']['epsilon']
-
-        results_summary_df.loc[iter, 'refine_iter'] = params['fit_to_sample']['pgd_iter']
-        results_summary_df.loc[iter, 'refine_random_start'] = params['fit_to_sample']['pgd_rand_start']
-        results_summary_df.loc[iter, 'refine_restart_num'] = params['fit_to_sample']['pgd_test_restart_num']
-
-        results_summary_df.loc[iter, 'params'] = [params]# To insert dict to DF we need to put it inside list
-        results_summary_erm_df.loc[iter, 'params'] = [params]
-
-        results_summary_df.loc[iter, 'params_fix_hash'] = hash(json.dumps(params['fit_to_sample'], sort_keys=True))
-        results_summary_erm_df.loc[iter, 'params_fix_hash'] = hash(json.dumps(params['fit_to_sample'], sort_keys=True))
-
-        results_summary_df.loc[iter, 'results_path'] = results_path
-        results_summary_erm_df.loc[iter, 'results_path'] = results_path  # To insert dict to DF we need to put it inside list
-
-
-
-
+            results_summary_df = pd.DataFrame(columns=statistics_df.index.tolist())
+            results_summary_erm_df = pd.DataFrame(columns=statistics_df.index.tolist())
+        results_summary_df = pd.concat([results_summary_df, statistics_df[['nml']].transpose()],
+                                       ignore_index=True, sort=False)
+        results_summary_erm_df = pd.concat([results_summary_erm_df, statistics_df[['erm']].transpose()],
+                                           ignore_index=True, sort=False)
     return results_summary_df.sort_values('eps'), results_summary_erm_df.sort_values('eps')
 
 
-def find_path_to_same_param_file(path_to_result_dir, look_at_path, fix_params_comparison=['epsilon']):
+def load_results_to_df_with_params(dir, idx=None, eps_type:str = 'fix', flag_return_res_df=False):
+    if type(dir) == list:
+        assert(len(dir) == 1)
+        dir = dir[0]
+    else:
+        assert(type(dir) == str)
+
+    results_path = dir + '\\results**.json'
+    results_path = glob.glob(results_path, recursive=True)
+    assert (len(results_path) < 2)
+    if len(results_path) == 0:
+        print("Warning: directory: " + dir + "is empty")
+        return None
+    print("Loading:" + str(results_path))
+    pnml_df, erm_df, genie_df, statistics_df = load_results_to_df(results_path, idx=idx, flag_concat_results_df=False)
+
+    param_path = dir + '\\params.json'
+    param_path = glob.glob(param_path, recursive=True)
+    assert (len(param_path) == 1)
+    with open(param_path[0]) as f:
+        params = json.load(f)
+    statistics_df = statistics_df.transpose()
+
+    statistics_df.loc['nml', 'eps'] = params['fit_to_sample']['epsilon'] if eps_type == 'fix' else \
+        params['adv_attack_test']['epsilon']
+    statistics_df.loc['erm', 'eps'] = params['fit_to_sample']['epsilon'] if eps_type == 'fix' else \
+        params['adv_attack_test']['epsilon']
+
+    statistics_df.loc['nml', 'refine_iter'] = params['fit_to_sample']['pgd_iter']
+    statistics_df.loc['nml', 'refine_random_start'] = params['fit_to_sample']['pgd_rand_start']
+    statistics_df.loc['nml', 'refine_restart_num'] = params['fit_to_sample']['pgd_test_restart_num']
+    statistics_df.loc['nml', 'beta'] = params['adv_attack_test']['beta'] if params['adv_attack_test'].keys().__contains__('beta') else 0
+
+    statistics_df.loc['nml', 'params'] = [params]  # To insert dict to DF we need to put it inside list
+    statistics_df.loc['erm', 'params'] = [params]
+
+    statistics_df.loc['nml', 'params_fix_hash'] = hash(json.dumps(params['fit_to_sample'], sort_keys=True))
+    statistics_df.loc['erm', 'params_fix_hash'] = hash(json.dumps(params['fit_to_sample'], sort_keys=True))
+
+    statistics_df.loc['nml', 'results_path'] = results_path
+    statistics_df.loc['erm', 'results_path'] = results_path  # To insert dict to DF we need to put it inside list
+    if flag_return_res_df:
+        pnml_df.columns = [col.replace('nml_', '') for col in pnml_df.columns]
+        return pnml_df, erm_df, genie_df, statistics_df.transpose() # TODO: fix idx not returning shrinked df
+    else:
+        return statistics_df.transpose()
+
+
+def find_path_to_result_with_similar_params(path_to_result_dir, look_at_path, fix_params_comparison=['epsilon'], return_res_file_flag=True):
     """
-    find_path_to_same_param_file - get a path to a result directory, extracts the parameters used in this experiment,
+    find_path_to_result_with_similar_params - get a path to a result directory, extracts the parameters used in this experiment,
     and look at look_at_path for a similiar param file according to fix_params_comparison list of parameters to compare.
     :param path_to_result_dir: the directory containing a param file. The the function looks for similiar param files to that one.
     :param look_at_path: Where to look for similiar param files.
     :param fix_params_comparison: A list of strings representing the param keys that are used for comparison
-    :return: a path to results.json which is inside directory containing the a similiar param file, None if nothing is found
+    :return: a list of paths to results.json which are inside directories containing the a similiar param file, None if nothing is found
     """
+    results_path_l = []
     param_path = path_to_result_dir + '\\params.json'
     param_path = glob.glob(param_path, recursive=False)
     assert(len(param_path) == 1)
@@ -600,7 +621,7 @@ def find_path_to_same_param_file(path_to_result_dir, look_at_path, fix_params_co
         results_path = glob.glob(results_path, recursive=False)
         assert(len(results_path) < 2)
         if len(results_path) == 0:
-            print("Warning: directory: " + dir + "im empty")
+            print("Warning: look at path directory: " + dir + " is empty")
             continue
 
         # Extract param file
@@ -615,29 +636,35 @@ def find_path_to_same_param_file(path_to_result_dir, look_at_path, fix_params_co
         for key in fix_params_comparison:
             if params['fit_to_sample'][key] != params_to_compare['fit_to_sample'][key]:
                 identical_flag = False
-
+        #
         if identical_flag:
-            return results_path
-        else:
-            results_path = None
+            if return_res_file_flag:
+                results_path_l.append(results_path[0])
+            else:
+                results_path_l.append(dir)
+        #     return results_path
+        # else:
+        #     results_path = None
 
-    print("No match in directory: {} for eps1: {}".format(dir, params['fit_to_sample'][key]))
-    return results_path
+    if len(results_path_l) == 0:
+        print("No match in directory: {} for eps1: {}".format(dir, params['fit_to_sample'][key]))
+        results_path_l = None
+    return results_path_l
 
 
-def create_list_of_corresponding_results_by_params(path1, path2, fix_params_comparison=['epsilon']):
+def create_list_of_corresponding_results_by_params(path1, path2, fix_params_comparison=['epsilon'], paths_to_res_file_flag=True):
     """
 
     :param path1:
     :param path2:
     :param fix_params_comparison:
-    :return:
+    :return: results_l a list of results in path1 and corresponding_result_path_lol, a list of lists of corresponding results in path2
     """
     search_string = path1 + '\\*'
     subdir_list = glob.glob(search_string, recursive=False)
     # print(subdir_list)
     results_l = []
-    corresponding_results_l = []
+    corresponding_result_path_lol = []
     for iter, dir in enumerate(subdir_list):
         # Make sure directory isn't empty
         # print("iteration {}".format(iter))
@@ -645,17 +672,17 @@ def create_list_of_corresponding_results_by_params(path1, path2, fix_params_comp
         results_path = glob.glob(results_path, recursive=True)
         assert (len(results_path) < 2)
         if len(results_path) == 0:
-            print("Warning: directory: " + dir + "im empty")
+            print("Warning: directory: " + dir + "is empty")
             continue
 
-        corresponding_result_path = find_path_to_same_param_file(dir, path2, fix_params_comparison)
-        if corresponding_result_path is not None:
-            results_l.append(results_path[0])
-            corresponding_results_l.append(corresponding_result_path[0])
+        corresponding_result_path_l = find_path_to_result_with_similar_params(dir, path2, fix_params_comparison, paths_to_res_file_flag)
+        if corresponding_result_path_l is not None:
+            path_to_add = results_path[0] if paths_to_res_file_flag else dir
+            results_l.append(path_to_add)
+            corresponding_result_path_lol.append(corresponding_result_path_l)
         else:
             print("Warning: directory: " + dir + "didn't find a corresponding directory")
-
-    return results_l, corresponding_results_l
+    return results_l, corresponding_result_path_lol
 
 
 
@@ -665,11 +692,11 @@ if __name__ == "__main__":
     json_file_name = './../results/paper/MNIST/mnist_adversarial_results_20190802_151544/results_mnist_adversarial_20190802_151544.json'
     # comb_df_statistics = find_optimal_risk_th_for_comb_df([json_file_name])
     # print(comb_df_statistics)
-    results_dict = load_dict_from_file_list([json_file_name])
-    results_df_natural = result_dict_to_nml_df(results_dict)
-    statistics_detector = create_adv_detector_df(results_df_natural, 0.2)
+    # results_dict = load_dict_from_file_list([json_file_name])
+    # results_df_natural = result_dict_to_nml_df(results_dict)
+    # statistics_detector = create_adv_detector_df(results_df_natural, 0.2)
 
-    # results_summary_df = create_nml_vs_eps_df('./../results/cifar/acc_vs_eps_refine/cifar_diff_fix')
+    results_summary_df = create_nml_vs_eps_df('./../results/cifar/acc_vs_eps_refine/cifar_diff_fix')
 
     json_file_name = './../output/imagenet_adversarial_results_20190725_172246/results_imagenet_adversarial_20190725_172246.json'
     json_file_name = os.path.join('.', json_file_name)

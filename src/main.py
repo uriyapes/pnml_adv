@@ -8,7 +8,7 @@ import torch
 torch.manual_seed(1)
 import numpy as np
 # torch.backends.cudnn.deterministic = True
-# torch.backends.cudnn.benchmark = False
+torch.backends.cudnn.benchmark = True
 np.random.seed(0)
 
 
@@ -182,6 +182,7 @@ if __name__ == "__main__":
                              'parameters', type=str)
     parser.add_argument('-e', '--test_eps', default=None, help='the epsilon strength of the attack', type=float)
     parser.add_argument('-r', '--fix_eps', default=None, help='the epsilon strength of the refinement', type=float)
+    parser.add_argument('-b', '--beta', default=None, help='the beta value for regret reduction regularization ', type=float)
     parser.add_argument('-i', '--fix_pgd_iter', default=None, help='the number of PGD iterations of the refinement', type=int)
     parser.add_argument('-n', '--fix_pgd_restart_num', default=None, help='the number of PGD restarts where 0 means no random start',
                         type=int)

@@ -123,6 +123,7 @@
             "pgd_step": 0.0078,
             "pgd_rand_start": true,
             "pgd_test_restart_num": 1,
+            "beta": 0.0,
             "test_start_idx": 0,
             "test_end_idx": 9999
         },
@@ -164,12 +165,12 @@
         }
     },
     "mnist_adversarial": {
-        "batch_size": 10,
-        "num_workers": 1,
+        "batch_size": 128,
+        "num_workers": 4,
         "freeze_layer": 0,
         "adv_attack_test": {
             "_comment": "===== MNIST ADVERSARY TESTING =====",
-            "white_box": true,
+            "white_box": false,
             "black_box_model_arch": "PnmlMnistClassifier",
             "black_box_model_path": "./trained_models/mnist_classifier/pgd_ep100_eps0.3_restart20_uniformRnd/mnist_adversarial_model_0.048931.pt",
             "attack_type": "pgd",
@@ -178,6 +179,7 @@
             "pgd_step": 0.01,
             "pgd_rand_start": true,
             "pgd_test_restart_num": 20,
+            "beta": 0.0,
             "test_start_idx": 0,
             "test_end_idx": 199
         },

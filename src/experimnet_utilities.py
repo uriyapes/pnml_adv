@@ -45,6 +45,8 @@ class Experiment:
             params['adv_attack_test']['test_end_idx'] = args['last_idx']
         if args['test_eps'] is not None:
             params['adv_attack_test']['epsilon'] = args['test_eps']  #TODO: change step size aswell
+        if args['beta'] is not None:
+            params['adv_attack_test']['beta'] = args['beta']
 
         if args['fix_eps'] is not None:
             params['fit_to_sample']['epsilon'] = args['fix_eps']
@@ -73,7 +75,8 @@ class Experiment:
         else:
             model.eval()
             attack = get_attack(p['attack_type'], model, p['epsilon'], p['pgd_iter'], p['pgd_step'],
-                                p['pgd_rand_start'], get_dataset_min_max_val(self.exp_type), p['pgd_test_restart_num'])
+                                p['pgd_rand_start'], get_dataset_min_max_val(self.exp_type), p['pgd_test_restart_num'],
+                                beta=p['beta'])
         return self.get_dataloaders(datafolder, attack)
 
     def get_dataloaders(self, data_folder: str = './data', attack=None):
