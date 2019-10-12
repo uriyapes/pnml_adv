@@ -130,7 +130,7 @@ class Boundary(Attack):
 
 def get_attack(attack_type: str, model: Module = None, eps: float = 0.3, iter: int = 30, step_size: float = 0.01,
                 random: bool = True, clamp: Tuple[float, float] = (0, 1), restart_num: int = 1,
-                loss_fn: Callable = torch.nn.CrossEntropyLoss, beta=0.0075):
+                loss_fn: Callable = torch.nn.CrossEntropyLoss, beta=0.0):
     if attack_type == 'no_attack':
         attack = NoAttack()
     elif attack_type == 'fgsm':

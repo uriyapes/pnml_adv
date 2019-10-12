@@ -60,7 +60,7 @@ def _iterative_gradient(model: Module,
                         y_target: torch.Tensor = None,
                         random: bool = False,
                         clamp: Tuple[float, float] = (0, 1),
-                        beta=0.0075) -> Tuple[torch.Tensor, int]:
+                        beta=0.0) -> Tuple[torch.Tensor, int]:
     """Base function for PGD and iterated FGSM
 
     Args:

@@ -64,7 +64,7 @@ class PnmlMnistClassifier(ModelTemplate):
             genie_prob[:, label] = F.softmax(self.forward_genie(x, torch_label), dim=1)[:, label]
         pnml_prob = genie_prob / genie_prob.sum(dim=1, keepdim=True)
         risk = genie_prob.sum(dim=1, keepdim=False)
-        self.regularization = 1.0/risk
+        self.regularization = 1.0/risk # TODO: fix, remove dvision!
         # assert(torch.allclose(pnml_prob.sum(dim=1), ))
         return pnml_prob
 
