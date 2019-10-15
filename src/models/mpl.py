@@ -63,8 +63,8 @@ class PnmlMnistClassifier(ModelTemplate):
             torch_label = torch.ones([x.shape[0]], dtype=torch.long).to(x.device) * label
             genie_prob[:, label] = F.softmax(self.forward_genie(x, torch_label), dim=1)[:, label]
         pnml_prob = genie_prob / genie_prob.sum(dim=1, keepdim=True)
-        risk = genie_prob.sum(dim=1, keepdim=False)
-        self.regularization = 1.0/risk # TODO: fix, remove dvision!
+        pnml_prob_sum = genie_prob.sum(dim=1, keepdim=False)
+        self.regularization = torch.log(pnml_prob_sum)  # This is the regret, each sample in the batch has it's own regret.
         # assert(torch.allclose(pnml_prob.sum(dim=1), ))
         return pnml_prob
 
