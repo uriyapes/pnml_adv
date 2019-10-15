@@ -48,8 +48,8 @@ class Experiment:
         if args['beta'] is not None:
             params['adv_attack_test']['beta'] = args['beta']
 
-        if args['fix_eps'] is not None:
-            params['fit_to_sample']['epsilon'] = args['fix_eps']
+        if args['lambda'] is not None:
+            params['fit_to_sample']['epsilon'] = args['lambda']
         if args['fix_pgd_iter'] is not None:
             params['fit_to_sample']['pgd_iter'] = args['fix_pgd_iter']
             params['fit_to_sample']['pgd_step'] = params['fit_to_sample']['epsilon'] / args['fix_pgd_iter']

@@ -9,8 +9,7 @@ idx=0
 array_len="${#test_eps_arr[@]}"
 for ((idx=0; idx<$((array_len - 1)); ++idx));
 do
-    #cuda_device=$((first_cuda_device_index + idx))
-    cuda_device=0
+    cuda_device=$((first_cuda_device_index + idx))
     printf "\ncuda_device=%s" "$cuda_device"
     CUDA_VISIBLE_DEVICES=$cuda_device python ./src/main.py -t $exp_name -e ${test_eps_arr[idx]} -o output/mnist_adv_model_diff_eps_pgd
     sleep 2

@@ -1,13 +1,10 @@
 import json
 import os
-import time
 
 import numpy as np
 import pandas as pd
 from scipy.stats import entropy
 import glob
-
-from dataset_utilities import create_cifar10_dataloaders
 
 # Import tesloader for random label experiment
 # _, testloader, _ = create_cifar10_dataloaders('../data/', 1, 1)
@@ -99,13 +96,14 @@ def load_results_to_df(files, is_random_labels=False, is_out_of_dist=False, idx=
         idx = pnml_df.index.values
     else:
         idx = set(idx)
-        pnml_df = pnml_df.loc[idx] #TODO : fix for all DF
+    pnml_df = pnml_df.loc[idx]
     statistic_pnml_df = calc_statistic_from_df_single(pnml_df.loc[idx]).rename(columns={'statistics': 'nml'})
     pnml_df = pnml_df.add_prefix('nml_')
     pnml_df = pnml_df.rename(columns={'nml_log_norm_factor': 'log_norm_factor'})
 
     # ERM
     erm_df = result_dict_to_erm_df(results_dict, is_random_labels=is_random_labels, is_out_of_dist=is_out_of_dist)
+    erm_df = erm_df.loc[idx]
     statistic_erm_df = calc_statistic_from_df_single(erm_df.loc[idx]).rename(columns={'statistics': 'erm'})
     erm_df = erm_df.add_prefix('erm_')
 
@@ -113,6 +111,7 @@ def load_results_to_df(files, is_random_labels=False, is_out_of_dist=False, idx=
     genie_df, statistic_genie_df = None, None
     if is_out_of_dist is False:
         genie_df = result_dict_to_genie_df(results_dict, is_random_labels=is_random_labels)
+        genie_df = genie_df.loc[idx]
         statistic_genie_df = calc_statistic_from_df_single(genie_df.loc[idx]).rename(columns={'statistics': 'genie'})
         genie_df = genie_df.add_prefix('genie_')
 
@@ -526,7 +525,7 @@ def find_results_in_path(path_to_folder:str):
     return glob.glob(pathname,  recursive=True)
 
 
-def create_nml_vs_eps_df(path_to_root_dir:str, eps_type:str = 'fix'):
+def create_nml_vs_eps_df(path_to_root_dir:str, eps_type:str = 'fix', idx = None):
     """
     Plot a graph of Accuracy as a function of epsilon.
     :param path_to_root_dir: Path to directory that contains all the subdirectories with the results
@@ -536,7 +535,7 @@ def create_nml_vs_eps_df(path_to_root_dir:str, eps_type:str = 'fix'):
     search_string = path_to_root_dir + '\\*'
     subdir_list = glob.glob(search_string, recursive=False)
     for iter, dir in enumerate(subdir_list):
-        statistics_df = load_results_to_df_with_params(dir, eps_type)
+        statistics_df = load_results_to_df_with_params(dir, idx=idx, eps_type=eps_type)
         if statistics_df is None:
             continue
         if iter == 0:
@@ -592,7 +591,7 @@ def load_results_to_df_with_params(dir, idx=None, eps_type:str = 'fix', flag_ret
     statistics_df.loc['erm', 'results_path'] = results_path  # To insert dict to DF we need to put it inside list
     if flag_return_res_df:
         pnml_df.columns = [col.replace('nml_', '') for col in pnml_df.columns]
-        return pnml_df, erm_df, genie_df, statistics_df.transpose() # TODO: fix idx not returning shrinked df
+        return pnml_df, erm_df, genie_df, statistics_df.transpose()
     else:
         return statistics_df.transpose()
 

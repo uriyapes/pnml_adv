@@ -60,7 +60,7 @@ def _iterative_gradient(model: Module,
                         y_target: torch.Tensor = None,
                         random: bool = False,
                         clamp: Tuple[float, float] = (0, 1),
-                        beta=0.0075) -> Tuple[torch.Tensor, int]:
+                        beta=0.0) -> Tuple[torch.Tensor, int]:
     """Base function for PGD and iterated FGSM
 
     Args:
@@ -100,7 +100,7 @@ def _iterative_gradient(model: Module,
         x_adv = x_adv
         x_adv.requires_grad_(True)
         prediction = model(x_adv, y)
-        loss = loss_fn(prediction, y_target if targeted else y).mean() - beta*torch.log(model.regularization.mean())#+ 0.5 * model.regularization.mean() TODO: uncomment
+        loss = loss_fn(prediction, y_target if targeted else y).mean() - beta*model.regularization.mean()
         # loss.backward()
         # x_adv_grad = x_adv.grad
         x_adv_grad = torch.autograd.grad(loss, x_adv, create_graph=False)[0]

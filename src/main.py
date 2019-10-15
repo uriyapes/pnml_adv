@@ -71,7 +71,7 @@ def run_experiment(experiment_h):
                                  params_init_training["adv_alpha"], params_init_training["epsilon"],
                                  params_init_training["attack_type"], params_init_training["pgd_iter"],
                                  params_init_training["pgd_step"], params_init_training["pgd_rand_start"],
-                                 params_init_training["save_model_every_n_epoch"]) # TODO: not all experiments contain adversarial parameters, fix this
+                                 params_init_training["save_model_every_n_epoch"])
         train_class.eval_test_during_train = True if params_init_training['eval_test_every_n_epoch'] is not None else False
         train_class.freeze_batch_norm = False
         acc_goal = params_init_training['acc_goal'] if 'acc_goal' in params_init_training else None
@@ -181,7 +181,7 @@ if __name__ == "__main__":
                         help='param file path used to load the parameters file containing default values to all '
                              'parameters', type=str)
     parser.add_argument('-e', '--test_eps', default=None, help='the epsilon strength of the attack', type=float)
-    parser.add_argument('-r', '--fix_eps', default=None, help='the epsilon strength of the refinement', type=float)
+    parser.add_argument('-r', '--lambda', default=None, help='the epsilon strength of the refinement (lambda)', type=float)
     parser.add_argument('-b', '--beta', default=None, help='the beta value for regret reduction regularization ', type=float)
     parser.add_argument('-i', '--fix_pgd_iter', default=None, help='the number of PGD iterations of the refinement', type=int)
     parser.add_argument('-n', '--fix_pgd_restart_num', default=None, help='the number of PGD restarts where 0 means no random start',
