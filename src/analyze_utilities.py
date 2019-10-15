@@ -591,7 +591,7 @@ def load_results_to_df_with_params(dir, idx=None, eps_type:str = 'fix', flag_ret
     statistics_df.loc['erm', 'results_path'] = results_path  # To insert dict to DF we need to put it inside list
     if flag_return_res_df:
         pnml_df.columns = [col.replace('nml_', '') for col in pnml_df.columns]
-        return pnml_df, erm_df, genie_df, statistics_df.transpose() # TODO: fix idx not returning shrinked df
+        return pnml_df, erm_df, genie_df, statistics_df.transpose()
     else:
         return statistics_df.transpose()
 
