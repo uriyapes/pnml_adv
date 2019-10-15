@@ -71,7 +71,7 @@ def run_experiment(experiment_h):
                                  params_init_training["adv_alpha"], params_init_training["epsilon"],
                                  params_init_training["attack_type"], params_init_training["pgd_iter"],
                                  params_init_training["pgd_step"], params_init_training["pgd_rand_start"],
-                                 params_init_training["save_model_every_n_epoch"]) # TODO: not all experiments contain adversarial parameters, fix this
+                                 params_init_training["save_model_every_n_epoch"])
         train_class.eval_test_during_train = True if params_init_training['eval_test_every_n_epoch'] is not None else False
         train_class.freeze_batch_norm = False
         acc_goal = params_init_training['acc_goal'] if 'acc_goal' in params_init_training else None
