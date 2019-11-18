@@ -8,7 +8,6 @@ from torch.utils import data
 from torchvision import transforms, datasets
 from PIL import Image
 from utilities import TorchUtils
-from adversarial_utilities import create_adversarial_sign_dataset, create_adversarial_mnist_sign_dataset
 from noise_dataset_class import NoiseDataset
 
 # Normalization for CIFAR10 dataset

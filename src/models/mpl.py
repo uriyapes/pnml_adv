@@ -3,6 +3,7 @@ from torch.nn import functional as F
 import torch.autograd
 from .model_utils import ModelTemplate
 from adversarial.attacks import get_attack
+from utilities import TorchUtils
 
 
 class Net(ModelTemplate):
@@ -24,7 +25,7 @@ class Net(ModelTemplate):
 class MNISTClassifier(ModelTemplate):
     def __init__(self):
         super(MNISTClassifier, self).__init__()
-        self.regularization = torch.zeros([1]).to("cuda")
+        self.regularization = TorchUtils.to_device(torch.zeros([1]))
         self.conv1 = nn.Conv2d(1, 32, kernel_size=5)
         self.conv2 = nn.Conv2d(32, 64, kernel_size=5)
         self.fc1 = nn.Linear(1024, 10)

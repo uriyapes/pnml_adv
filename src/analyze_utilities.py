@@ -5,7 +5,7 @@ import numpy as np
 import pandas as pd
 from scipy.stats import entropy
 import glob
-
+pd.set_option('display.max_columns', 500)
 # Import tesloader for random label experiment
 # _, testloader, _ = create_cifar10_dataloaders('../data/', 1, 1)
 
@@ -239,6 +239,46 @@ def calc_statistic_from_df_single(result_df):
                                  index=['acc', 'mean loss', 'std loss', 'mean entropy'])})
     return statistics_df
 
+
+def calc_nml_change_per_label(nml_df, erm_df, log_flag = False, unnormallized_nml_flag = True):
+    """
+    calc_nml_change_per_label - calculates the difference between the probabilities/log-loss of nml and erm predictions
+                                for all classes.
+    :param nml_df: pNML dataframe that contains the probabilities of the different labels.
+    :param erm_df: ERM dataframe that contains the probabilities of the different labels.
+    :return diff_df: A dataframe that contains the difference in prob./log-loss of each sample for each one of the
+                    possible labels.
+    """
+    assert(len(nml_df) == len(erm_df))
+    assert(~log_flag or ~unnormallized_nml_flag)  # No reason to calculate unnormalized mean loss
+    # df_cols = [str(x) for x in range(10)]
+    # df_col = [str(x) for x in ]
+
+
+    cls_keys = list(filter(lambda l: l.isdigit(), [str(col) for col in nml_df.keys()] ))
+    diff_df = pd.DataFrame(columns=cls_keys)
+    diff_df['true_label'] = nml_df['true_label']
+    diff_df['is_correct_nml'] = nml_df['is_correct']
+    diff_df['is_correct_erm'] = erm_df['is_correct']
+    second_largest_idx = erm_df[cls_keys].apply(lambda row: row.nlargest(2).idxmin(), axis=1)  # Find the second largest idx
+    diff_df['other_label'] = erm_df[cls_keys].apply(lambda row: row.nlargest(3).idxmin(), axis=1)  # Find the third largest idx
+    if unnormallized_nml_flag:
+        nml_df.loc[:, cls_keys] = nml_df.apply(lambda row: row[cls_keys] * np.exp(row['log_norm_factor']), axis=1)[cls_keys]
+    if log_flag:
+        nml_df.loc[:,cls_keys] = -np.log(nml_df[cls_keys] + np.finfo(float).tiny)
+        erm_df.loc[:,cls_keys] = -np.log(erm_df[cls_keys] + np.finfo(float).tiny)
+    diff_df.loc[:,cls_keys] = nml_df[cls_keys] - erm_df[cls_keys]
+    # Find adversarial label - the highest probability label (which isn't the true label)
+    diff_df['adv_label'] = erm_df[[str(x) for x in range(10)]].idxmax(axis=1)
+    idxs_to_replace_to_second_largest = diff_df['adv_label'].astype('int32') == diff_df['true_label'].astype('int32')
+    print("number of idxs to replace to second largest: {}".format(idxs_to_replace_to_second_largest.sum()))
+
+    diff_df.loc[idxs_to_replace_to_second_largest, 'adv_label'] = second_largest_idx
+    diff_df['true_minus_adv_improve'] = diff_df.apply(lambda row: row[str(row['true_label'])] - row[str(row['adv_label'])], axis=1)
+    diff_df['true_label_diff'] = diff_df.apply(lambda row: row[str(row['true_label'])], axis=1)
+    diff_df['adv_label_diff'] = diff_df.apply(lambda row: row[str(row['adv_label'])], axis=1)
+    diff_df['other_label_diff'] = diff_df.apply(lambda row: row[str(row['other_label'])], axis=1)
+    return diff_df
 
 def result_dict_to_nml_df(results_dict, is_random_labels=False, is_out_of_dist=False):
     # Initialize col of df
@@ -691,9 +731,12 @@ if __name__ == "__main__":
     json_file_name = './../results/paper/MNIST/mnist_adversarial_results_20190802_151544/results_mnist_adversarial_20190802_151544.json'
     # comb_df_statistics = find_optimal_risk_th_for_comb_df([json_file_name])
     # print(comb_df_statistics)
-    # results_dict = load_dict_from_file_list([json_file_name])
-    # results_df_natural = result_dict_to_nml_df(results_dict)
-    # statistics_detector = create_adv_detector_df(results_df_natural, 0.2)
+    results_dict = load_dict_from_file_list([json_file_name])
+    nml_df = result_dict_to_nml_df(results_dict)
+    erm_df = result_dict_to_erm_df(results_dict)
+    diff_df = calc_nml_change_per_label(nml_df, erm_df)
+    print(diff_df)
+    # statistics_detector = create_adv_detector_df(nml_df, 0.2)
 
     results_summary_df = create_nml_vs_eps_df('./../results/cifar/acc_vs_eps_refine/cifar_diff_fix')
 
