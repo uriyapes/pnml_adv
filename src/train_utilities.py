@@ -436,7 +436,7 @@ def execute_pnml_adv_fix(pnml_params: dict, params_init_training: dict, dataload
     model = deepcopy(model_base_input)  # working on a single sample, it is reasonable to assume cpu is better
     refinement = get_attack(pnml_params['fix_type'], model, pnml_params['epsilon'], pnml_params['pgd_iter'],
                            pnml_params['pgd_step'], pnml_params['pgd_rand_start'], get_dataset_min_max_val(dataloaders_input['dataset_name']),
-                           pnml_params['pgd_test_restart_num'])
+                           pnml_params['pgd_test_restart_num'], flip_grad_ratio=0.4)
     for fix_to_label in trained_label_list:
         time_trained_label_start = time.time()
 

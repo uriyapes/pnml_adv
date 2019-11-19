@@ -60,7 +60,8 @@ def _iterative_gradient(model: Module,
                         y_target: torch.Tensor = None,
                         random: bool = False,
                         clamp: Tuple[float, float] = (0, 1),
-                        beta=0.0) -> Tuple[torch.Tensor, int]:
+                        beta=0.0,
+                        flip_grad_ratio: float = 0.0) -> Tuple[torch.Tensor, int]:
     """Base function for PGD and iterated FGSM
 
     Args:
@@ -97,13 +98,17 @@ def _iterative_gradient(model: Module,
         # The other option (original) is to work with temp variable _x_adv (see below) but it seems to prelong the
         # calculation time maybe as a result of re-cloning
         # _x_adv = x_adv.clone().detach().requires_grad_(True)
-        x_adv = x_adv
+        x_adv = x_adv.detach()
         x_adv.requires_grad_(True)
         prediction = model(x_adv, y)
         loss = loss_fn(prediction, y_target if targeted else y).mean() - beta*model.regularization.mean()
         # loss.backward()
         # x_adv_grad = x_adv.grad
         x_adv_grad = torch.autograd.grad(loss, x_adv, create_graph=False)[0]
+        if flip_grad_ratio > 0.0:
+            bit_mask = torch.rand_like(x_adv_grad) < flip_grad_ratio
+            x_adv_grad[bit_mask] = x_adv_grad[bit_mask] * -1
+            # x_adv_grad[:, :, :, 0:int(x_adv_grad.shape[3]*flip_grad_ratio)] = x_adv_grad[:, :, :, 0:int(x_adv_grad.shape[3]*flip_grad_ratio)] * -1
         with torch.no_grad():
             if step_norm == 'inf':
                 gradients = (x_adv_grad.sign() * step).detach()
@@ -124,7 +129,7 @@ def _iterative_gradient(model: Module,
 
         # Project back into l_norm ball and correct range
         x_adv = project(x, x_adv, norm, eps).clamp(*clamp)
-    x_adv = x_adv
+    x_adv = x_adv.detach()
     # x_adv.requires_grad_(True) #  This is done so model with refinement could do backprop
     prediction = model(x_adv, y)
     adv_loss = loss_fn(prediction, y_target if targeted else y)
@@ -145,7 +150,8 @@ def iterated_fgsm(model: Module,
                   random: bool = False,
                   clamp: Tuple[float, float] = (0, 1),
                   restart_num: int = 1,
-                  beta = 0.0075) -> torch.Tensor:
+                  beta = 0.0075,
+                  flip_grad_ratio: float = 0.0) -> torch.Tensor:
     """Creates an adversarial sample using the iterated Fast Gradient-Sign Method
 
     This is a white-box attack.
@@ -181,7 +187,7 @@ def iterated_fgsm(model: Module,
     loss_fn = loss_fn(reduction='none')
     for i in range(restart_num):
         x_adv, loss = _iterative_gradient(model=model, x=x, y=y, loss_fn=loss_fn, k=k, eps=eps, norm=norm, step=step,
-                                   step_norm='inf', y_target=y_target, random=random, clamp=clamp, beta=beta)
+                                   step_norm='inf', y_target=y_target, random=random, clamp=clamp, beta=beta, flip_grad_ratio=flip_grad_ratio)
         x_adv_l.append(x_adv)
         loss_l.append(loss)
         # print("loss in iter{}:".format(i) + str(loss))
