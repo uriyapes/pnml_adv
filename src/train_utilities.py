@@ -211,7 +211,7 @@ class TrainClass:
 
     @classmethod
     def __forward_pass(cls, model, images, labels, loss_func='default'):
-        outputs = model(images, labels)
+        outputs = model(images)
         if loss_func == 'default':
             loss = cls.criterion(outputs, labels)  # Negative log-loss
         else:
@@ -268,7 +268,8 @@ def eval_single_sample(model, test_sample_data):
     if len(sample_data.shape) == 3:
         sample_data = sample_data.unsqueeze(0)  # make the single sample 4-dim tensor
 
-    with torch.no_grad():
+    # with torch.no_grad():
+    with torch.enable_grad():
         output = model(sample_data).detach().cpu()
 
         # Prediction
@@ -410,7 +411,7 @@ def execute_pnml_adv_fix(pnml_params: dict, params_init_training: dict, dataload
     :param genie_only_training: calculate only genie probability for speed up when debugging
     :return: None
     """
-
+    assert(model_base_input.__class__ != "PnmlMnistClassifier") #deepcopy doesn't work for PnmlMnistClassifier but it doesn't matter because PnmlMnistClassifier accuracy is already pNML accuracy and this function doesn't need to run
     # Check pnml_params contains all required keys
     required_keys = ['lr', 'momentum', 'step_size', 'gamma', 'weight_decay', 'epochs']
     for key in required_keys:
@@ -433,10 +434,11 @@ def execute_pnml_adv_fix(pnml_params: dict, params_init_training: dict, dataload
         trained_label_list = [sample_test_true_label.tolist()]
     else:
         trained_label_list = range(len(classes_trained))
-    model = deepcopy(model_base_input)  # working on a single sample, it is reasonable to assume cpu is better
+    model = deepcopy(model_base_input)
+    model.eval()
     refinement = get_attack(pnml_params['fix_type'], model, pnml_params['epsilon'], pnml_params['pgd_iter'],
                            pnml_params['pgd_step'], pnml_params['pgd_rand_start'], get_dataset_min_max_val(dataloaders_input['dataset_name']),
-                           pnml_params['pgd_test_restart_num'], flip_grad_ratio=0.4)
+                           pnml_params['pgd_test_restart_num'], flip_grad_ratio=0.0)
     for fix_to_label in trained_label_list:
         time_trained_label_start = time.time()
 

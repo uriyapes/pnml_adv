@@ -440,6 +440,9 @@ class CIFAR10AdversarialTest(datasets.CIFAR10):
         img = self.test_data[index]
         return img, target
 
+    def __len__(self):
+        return len(self.test_data)
+
 
 def create_adversarial_cifar10_dataloaders(attack, data_dir: str = './data', batch_size: int = 128, num_workers: int = 4,
                                            start_idx=0, end_idx=9999, train_augmentation: bool = True):
@@ -569,14 +572,15 @@ class MnistAdversarialTest(datasets.MNIST):
         This method is pytorch version agnostic which returns the data buffer. 
         """
         # print(calc_norm(transform_data, self.adv_data.to("cpu")))
-        if torch.__version__ == '0.4.1':
-            self.test_data = self.adv_data.to("cpu")
-        else:
-            self.data = self.adv_data.to("cpu")
+        self.adv_data = self.adv_data[start_idx:end_idx+1]
+        # if torch.__version__ == '0.4.1':
+        #     self.test_data = self.adv_data[start_idx:end_idx+1].to("cpu")
+        # else:
+        #     self.data = self.adv_data[start_idx:end_idx+1].to("cpu")
 
         self.transform = null_transform
         if attack.name != 'NoAttack':
-            plt_img(self.test_data, plt_img_list_idx, True)
+            plt_img(self.adv_data, plt_img_list_idx, True)
 
     def __getitem__(self, index):
         """
@@ -593,6 +597,9 @@ class MnistAdversarialTest(datasets.MNIST):
             target = self.target_transform(target)
         img = self.adv_data[index]
         return img, target
+
+    def __len__(self):
+        return len(self.adv_data)
 
 
 def calc_norm(original_data, adv_data):

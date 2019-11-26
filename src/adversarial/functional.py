@@ -32,7 +32,7 @@ def fgsm(model: Module,
     x = x.detach()
     x.requires_grad = True
     targeted = y_target is not None
-    prediction = model(x, y)
+    prediction = model(x)
     loss = loss_fn(prediction, y_target if targeted else y)
     loss.backward(retain_graph=True)
 
@@ -98,9 +98,9 @@ def _iterative_gradient(model: Module,
         # The other option (original) is to work with temp variable _x_adv (see below) but it seems to prelong the
         # calculation time maybe as a result of re-cloning
         # _x_adv = x_adv.clone().detach().requires_grad_(True)
-        x_adv = x_adv.detach()
+        x_adv = x_adv
         x_adv.requires_grad_(True)
-        prediction = model(x_adv, y)
+        prediction = model(x_adv)
         loss = loss_fn(prediction, y_target if targeted else y).mean() - beta*model.regularization.mean()
         # loss.backward()
         # x_adv_grad = x_adv.grad
@@ -129,9 +129,9 @@ def _iterative_gradient(model: Module,
 
         # Project back into l_norm ball and correct range
         x_adv = project(x, x_adv, norm, eps).clamp(*clamp)
-    x_adv = x_adv.detach()
+    x_adv = x_adv
     # x_adv.requires_grad_(True) #  This is done so model with refinement could do backprop
-    prediction = model(x_adv, y)
+    prediction = model(x_adv)
     adv_loss = loss_fn(prediction, y_target if targeted else y)
     x_adv.requires_grad_ = False
 

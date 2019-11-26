@@ -131,7 +131,7 @@ def run_experiment(experiment_h):
         # sample_test_data = dataloaders['test'].dataset.test_data[idx]
         # sample_test_true_label = dataloaders['test'].dataset.test_labels[idx]
         # sample_test_data_trans = sample_test_data
-        sample_test_data_trans, sample_test_true_label = dataloaders['test'].dataset[idx]  # by accessing the data using .dataset[idx] we preform __get_item__ method which preforms all needed transformations
+        sample_test_data_trans, sample_test_true_label = dataloaders['test'].dataset[idx - params['adv_attack_test']['test_start_idx']]  # by accessing the data using .dataset[idx] we preform __get_item__ method which preforms all needed transformations
 
         # # Make sure the data is HxWxC:
         # if len(sample_test_data.shape) == 3 and sample_test_data.shape[2] > sample_test_data.shape[0]:

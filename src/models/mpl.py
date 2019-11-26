@@ -48,6 +48,7 @@ mnist_max_val = (1 - mean_mnist) / mnist_std
 class PnmlMnistClassifier(ModelTemplate):
     def __init__(self, base_model, params):
         super().__init__()
+        self.params = params
         self.gamma = params['epsilon'] * (mnist_max_val - mnist_min_val)
         self.clamp = (mnist_min_val, mnist_max_val)
         self.base_model = base_model
@@ -56,8 +57,9 @@ class PnmlMnistClassifier(ModelTemplate):
         self.loss_fn = torch.nn.CrossEntropyLoss(reduction='sum')  # reduction='none' The loss is config with reduction='none' so the grad of each sample won't be effected by other samples
         #     TODO : support larger batch sizes.
         self.regularization = torch.zeros([1])  # This value stores the risk
+        # self.training = False
 
-    def forward(self, x, true_label):
+    def forward(self, x):
         num_classes = 10
         genie_prob = torch.zeros([x.shape[0], num_classes], requires_grad=True).to(x.device)
         for label in range(num_classes):
@@ -85,6 +87,9 @@ class PnmlMnistClassifier(ModelTemplate):
 
     def forward_base_model(self, x):
         return self.base_model(x)
+
+    def state_dict(self):
+        return self.base_model.state_dict()
 
 
 class PnmlMnistClassifier2(MNISTClassifier):
