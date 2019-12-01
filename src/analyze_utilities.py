@@ -1,6 +1,6 @@
 import json
 import os
-
+import re
 import numpy as np
 import pandas as pd
 from scipy.stats import entropy
@@ -87,6 +87,27 @@ def load_dict_from_file_list(files):
     return result_dict
 
 
+def extract_results_from_logfile_to_df(log_file):
+    """
+    Get a log file, using regular expression read the evaluation (accuracy and loss of the test set) and return them as
+    a dataframe
+    :param log_file: path to log file
+    :return: dataframe containing the results
+    """
+    txt_to_search = "Base model ----- \[Natural-train test\] loss .*"
+    with open(log_file) as f:
+        data = f.read()
+        line = re.findall(txt_to_search,data)
+        # print("Line is" + line[0] +"\nLines found:" + str(len(line)))
+        assert(len(line) == 1)
+        r = re.findall("[-+]?\d*\.\d+|\d+", line[0])
+    statistics_df = pd.DataFrame(
+        {'nml': pd.Series([float(r[3]), float(r[1])],
+                                 index=['acc', 'mean loss'])})
+    return statistics_df
+
+
+
 def load_results_to_df(files, is_random_labels=False, is_out_of_dist=False, idx=None, flag_concat_results_df=True):
     results_dict = load_dict_from_file_list(files)
 
@@ -98,14 +119,12 @@ def load_results_to_df(files, is_random_labels=False, is_out_of_dist=False, idx=
         idx = set(idx)
     pnml_df = pnml_df.loc[idx]
     statistic_pnml_df = calc_statistic_from_df_single(pnml_df.loc[idx]).rename(columns={'statistics': 'nml'})
-    pnml_df = pnml_df.add_prefix('nml_')
-    pnml_df = pnml_df.rename(columns={'nml_log_norm_factor': 'log_norm_factor'})
+    # pnml_df = pnml_df.rename(columns={'nml_log_norm_factor': 'log_norm_factor'}) #TODO: remove this line
 
     # ERM
     erm_df = result_dict_to_erm_df(results_dict, is_random_labels=is_random_labels, is_out_of_dist=is_out_of_dist)
     erm_df = erm_df.loc[idx]
     statistic_erm_df = calc_statistic_from_df_single(erm_df.loc[idx]).rename(columns={'statistics': 'erm'})
-    erm_df = erm_df.add_prefix('erm_')
 
     # genie
     genie_df, statistic_genie_df = None, None
@@ -113,10 +132,9 @@ def load_results_to_df(files, is_random_labels=False, is_out_of_dist=False, idx=
         genie_df = result_dict_to_genie_df(results_dict, is_random_labels=is_random_labels)
         genie_df = genie_df.loc[idx]
         statistic_genie_df = calc_statistic_from_df_single(genie_df.loc[idx]).rename(columns={'statistics': 'genie'})
-        genie_df = genie_df.add_prefix('genie_')
 
     # Merge and return
-    result_df = pd.concat([pnml_df, erm_df, genie_df], axis=1)
+    result_df = pd.concat([pnml_df.add_prefix('nml_'), erm_df.add_prefix('erm_'), genie_df.add_prefix('genie_')], axis=1)
     statistic_df = pd.concat([statistic_pnml_df, statistic_erm_df, statistic_genie_df], axis=1)
     if flag_concat_results_df:
         return result_df, statistic_df
@@ -186,27 +204,36 @@ def find_optimal_risk_th_for_comb_df(files, min_risk_th:float = -0.1, max_risk_t
     return statistics_df
 
 
-def create_adv_detector_df(result_df, risk_th, adv_dataset_flag=True, idx=None):
+def create_adv_detector_df(result_df, threshold, detect_method="risk", adv_dataset_flag=True, idx=None):
     """
     create_adv_detector_df - gets result_df and by using the risk detects misclassified samples, the misclassification
     could be a result of wrong classification of natural or adversarial image. In case the detected sample is truly wrong
     (TN - true negative) the sample is saved as correctly classified. In case the detected sample was classified correctly
     then the detector reclassifiy it as incorrect.
-    The detection is performed by examining the risk of each sample, if the risk is higher than the risk_th then the sample
+    The detection is performed by examining the risk of each sample, if the risk is higher than the threshold then the sample
     is considered wrongly classified.
     :param result_df: a dataframe containing the results
-    :param risk_th: the risk threshold, samples with higher risk than this value are detected as wrongly classified.
+    :param threshold: the risk threshold/ probability threshold, samples with higher risk / lower probability  than threshold are detected as wrongly classified.
+    :param detect_method: If "risk" use the risk to detect adversarial samples. If "prob" use max-probability for detection
     :param idx: the indexs to analyze in the dataframe, if no value is given all indexs are analyzed.
     :param adv_dataset_flag: indicates whether the dataset is adversarial or natural
     :return: A statistics dataframe after the reclassification according to the risk
     """
+    assert(detect_method == "risk" or detect_method == "prob")
+    # print(result_df)
     if idx is None: # if not idx is given (empty set) then take all the indexes
         idx = result_df.index.values
     else:
         idx = set(idx)
+
     result_df = pd.DataFrame.copy(result_df.loc[idx], deep=True)
-    detected_idx = result_df['log_norm_factor'] > risk_th
-    positive_detcted_idx = (result_df['log_norm_factor'] > risk_th) & (result_df['is_correct'] == False)
+    if detect_method == "risk":
+        detected_idx = result_df['log_norm_factor'] > threshold
+    elif detect_method == "prob":
+        cls_keys = list(filter(lambda l: l.isdigit(), [str(col) for col in result_df.keys()]))
+        detected_idx = result_df[cls_keys].apply(lambda row: row.max() < threshold, axis=1)
+    # print(detected_idx)
+    positive_detcted_idx = (detected_idx) & (result_df['is_correct'] == False)
     if adv_dataset_flag:
         TP = len(result_df.loc[detected_idx])
         FN = len(idx) - TP
@@ -215,7 +242,7 @@ def create_adv_detector_df(result_df, risk_th, adv_dataset_flag=True, idx=None):
         # print(TP,FN, TPSA)
         result_df.loc[detected_idx, "is_correct"] = True
     else:
-        correct_fp_idx = (result_df['log_norm_factor'] > risk_th) & (result_df['is_correct'] == True)
+        correct_fp_idx = (detected_idx) & (result_df['is_correct'] == True)
         CFP = len(result_df.loc[correct_fp_idx])  # correct false-positive , measures how many correct samples are detected
         FP = len(result_df.loc[detected_idx])
         TN = len(idx) - FP
@@ -224,7 +251,7 @@ def create_adv_detector_df(result_df, risk_th, adv_dataset_flag=True, idx=None):
         # result_df.loc[detected_idx, "is_correct"] = ~result_df.loc[detected_idx, "is_correct"] # ~ is element-wise NOT operator, correct become incorrect in vice versa
 
     statistic_adv_detector_df = calc_statistic_from_df_single(result_df.loc[idx]).rename(columns={'statistics': 'acc'})
-    statistic_adv_detector_df.loc["risk_th"] = risk_th
+    statistic_adv_detector_df.loc["threshold"] = threshold
     statistic_adv_detector_df.loc["FPR"] = float(FP) / len(idx)
 
     return statistic_adv_detector_df
@@ -565,7 +592,7 @@ def find_results_in_path(path_to_folder:str):
     return glob.glob(pathname,  recursive=True)
 
 
-def create_nml_vs_eps_df(path_to_root_dir:str, eps_type:str = 'fix', idx = None):
+def create_nml_vs_eps_df(path_to_root_dir:str, eps_type:str = 'fix', idx = None, flag_read_json=True):
     """
     Plot a graph of Accuracy as a function of epsilon.
     :param path_to_root_dir: Path to directory that contains all the subdirectories with the results
@@ -574,8 +601,9 @@ def create_nml_vs_eps_df(path_to_root_dir:str, eps_type:str = 'fix', idx = None)
     """
     search_string = path_to_root_dir + '\\*'
     subdir_list = glob.glob(search_string, recursive=False)
+    assert(len(subdir_list) >= 1)
     for iter, dir in enumerate(subdir_list):
-        statistics_df = load_results_to_df_with_params(dir, idx=idx, eps_type=eps_type)
+        statistics_df = load_results_to_df_with_params(dir, idx=idx, eps_type=eps_type, flag_read_json=flag_read_json)
         if statistics_df is None:
             continue
         if iter == 0:
@@ -583,26 +611,43 @@ def create_nml_vs_eps_df(path_to_root_dir:str, eps_type:str = 'fix', idx = None)
             results_summary_erm_df = pd.DataFrame(columns=statistics_df.index.tolist())
         results_summary_df = pd.concat([results_summary_df, statistics_df[['nml']].transpose()],
                                        ignore_index=True, sort=False)
-        results_summary_erm_df = pd.concat([results_summary_erm_df, statistics_df[['erm']].transpose()],
-                                           ignore_index=True, sort=False)
+        if flag_read_json:
+            results_summary_erm_df = pd.concat([results_summary_erm_df, statistics_df[['erm']].transpose()],
+                                               ignore_index=True, sort=False)
     return results_summary_df.sort_values('eps'), results_summary_erm_df.sort_values('eps')
 
 
-def load_results_to_df_with_params(dir, idx=None, eps_type:str = 'fix', flag_return_res_df=False):
+def load_results_to_df_with_params(dir, idx=None, eps_type:str = 'fix', flag_return_res_df=False, flag_read_json=True):
+    """
+    Load result to dataframe with experiment parameters.
+    :param dir: The parent directory
+    :param idx: which idxs to compute from .json file
+    :param eps_type: 'fix' for refinement eps (\lambda in paper) or 'attack' for adversarial eps (\eps in paper)
+    :param flag_return_res_df: see return
+    :param flag_read_json: extract results from .json or from .log file
+    :return: statistics_df (and pnml_df, erm_df, genie_df if flag_return_res_df is True)
+    """
+    assert(not (flag_read_json is False and flag_return_res_df is True))
+    assert(not (flag_read_json is False and idx is not None))
     if type(dir) == list:
         assert(len(dir) == 1)
         dir = dir[0]
     else:
         assert(type(dir) == str)
-
-    results_path = dir + '\\results**.json'
+    if flag_read_json:
+        results_path = dir + '\\results**.json'
+    else:
+        results_path = dir + '\\log**.log'
     results_path = glob.glob(results_path, recursive=True)
     assert (len(results_path) < 2)
     if len(results_path) == 0:
         print("Warning: directory: " + dir + "is empty")
         return None
     print("Loading:" + str(results_path))
-    pnml_df, erm_df, genie_df, statistics_df = load_results_to_df(results_path, idx=idx, flag_concat_results_df=False)
+    if flag_read_json:
+        pnml_df, erm_df, genie_df, statistics_df = load_results_to_df(results_path, idx=idx, flag_concat_results_df=False)
+    else:
+        statistics_df = extract_results_from_logfile_to_df(results_path[0])
 
     param_path = dir + '\\params.json'
     param_path = glob.glob(param_path, recursive=True)
@@ -734,9 +779,9 @@ if __name__ == "__main__":
     results_dict = load_dict_from_file_list([json_file_name])
     nml_df = result_dict_to_nml_df(results_dict)
     erm_df = result_dict_to_erm_df(results_dict)
-    diff_df = calc_nml_change_per_label(nml_df, erm_df)
-    print(diff_df)
-    # statistics_detector = create_adv_detector_df(nml_df, 0.2)
+    # diff_df = calc_nml_change_per_label(nml_df, erm_df)
+    # print(diff_df)
+    statistics_detector = create_adv_detector_df(erm_df, 0, detect_method="prob")
 
     results_summary_df = create_nml_vs_eps_df('./../results/cifar/acc_vs_eps_refine/cifar_diff_fix')
 

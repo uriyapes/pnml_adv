@@ -11,8 +11,8 @@ for ((idx=0; idx<$((array_len - 1)); ++idx));
 do
     cuda_device=$((first_cuda_device_index + idx))
     printf "\ncuda_device=%s" "$cuda_device"
-    CUDA_VISIBLE_DEVICES=$cuda_device python ./src/main.py -t $exp_name -e ${test_eps_arr[idx]} -o output/mnist_adv_model_diff_eps_pgd
-    sleep 2
+    CUDA_VISIBLE_DEVICES=$cuda_device python ./src/main.py -t $exp_name -e ${test_eps_arr[idx]} -o output/mnist_bpda_model_diff_eps_pgd_50iter &
+    sleep 4
 done
 cuda_device=$((first_cuda_device_index + idx))
-CUDA_VISIBLE_DEVICES=$cuda_device python ./src/main.py -t $exp_name -e ${test_eps_arr[idx]} -o output/mnist_adv_model_diff_eps_pgd
+CUDA_VISIBLE_DEVICES=$cuda_device python ./src/main.py -t $exp_name -e ${test_eps_arr[idx]} -o output/mnist_bpda_model_diff_eps_pgd_50iter

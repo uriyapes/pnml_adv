@@ -9,7 +9,7 @@ do
     cuda_device=$((first_cuda_device_index + idx))
     printf "\ncuda_device=%s" "$cuda_device"
     CUDA_VISIBLE_DEVICES=$cuda_device python ./src/main.py -t cifar_adversarial -r ${fix_eps_arr[idx]} -o output/cifar_diff_fix_natural &
-    sleep 2
+    sleep 4
 done
 cuda_device=$((first_cuda_device_index + idx))
 CUDA_VISIBLE_DEVICES=$cuda_device python ./src/main.py -t cifar_adversarial -r ${fix_eps_arr[idx]} -o output/cifar_diff_fix_natural
