@@ -36,7 +36,7 @@ def get_dataset_min_max_val(dataset_name: str):
     elif dataset_name == 'mnist_adversarial':
         return mnist_min_val, mnist_max_val
     elif dataset_name == 'imagenet_adversarial':
-        return mnist_min_val, mnist_max_val
+        return imagenet_min_val, imagenet_max_val
     else:
         raise NameError("No experiment name:" + dataset_name)
 
@@ -396,33 +396,33 @@ class CIFAR10AdversarialTest(datasets.CIFAR10):
         """
         super(CIFAR10AdversarialTest, self).__init__(**kwargs)
         assert(self.train is False)
-        assert(start_idx >= 0 and end_idx < self.test_data.shape[0])
+        assert(start_idx >= 0 and end_idx < self.data.shape[0])
         test_samples = end_idx - start_idx + 1
         grp_size = 100
         assert(test_samples % grp_size == 0)
 
         test_adv_data = torch.zeros([test_samples, 3, 32, 32])
         from utilities import plt_img
-        plt_img(self.test_data, [0])
+        plt_img(self.data, [0])
         for index in range(test_samples):
             # use the transform on all the testset
-            img = Image.fromarray(self.test_data[index+start_idx])
+            img = Image.fromarray(self.data[index+start_idx])
             test_adv_data[index] = transform(img)
         plt_img(test_adv_data, [0])
-        self.test_data = test_adv_data
-        self.test_labels = torch.LongTensor(self.test_labels[start_idx:end_idx+1])
+        self.data = test_adv_data
+        self.targets = torch.LongTensor(self.targets[start_idx:end_idx+1])
 
         device = TorchUtils.get_device()
         for index in range(int(test_samples / grp_size)):
             # print(index)
             # save the adversarial testset
-            self.test_data[index * grp_size:(index + 1) * grp_size] = attack.create_adversarial_sample(
-                self.test_data[index * grp_size:(index + 1) * grp_size].to(device),
-                self.test_labels[index * grp_size:(index + 1) * grp_size].to(device))
+            self.data[index * grp_size:(index + 1) * grp_size] = attack.create_adversarial_sample(
+                self.data[index * grp_size:(index + 1) * grp_size].to(device),
+                self.targets[index * grp_size:(index + 1) * grp_size].to(device))
 
-        self.test_data = self.test_data.to("cpu")
+        self.data = self.data.to("cpu")
         self.transform = null_transform
-        plt_img(self.test_data, [0])
+        plt_img(self.data, [0])
 
     def __getitem__(self, index):
         """
@@ -434,14 +434,14 @@ class CIFAR10AdversarialTest(datasets.CIFAR10):
             tuple: (image, target) where target is index of the target class.
         """
 
-        target = self.test_labels[index]
+        target = self.targets[index]
         if self.target_transform is not None:
             target = self.target_transform(target)
-        img = self.test_data[index]
+        img = self.data[index]
         return img, target
 
     def __len__(self):
-        return len(self.test_data)
+        return len(self.data)
 
 
 def create_adversarial_cifar10_dataloaders(attack, data_dir: str = './data', batch_size: int = 128, num_workers: int = 4,

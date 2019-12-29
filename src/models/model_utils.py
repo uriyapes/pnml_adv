@@ -33,6 +33,14 @@ class ImagenetModel(ModelTemplate):
 def load_pretrained_model(model_base, model_params_path):
     device = TorchUtils.get_device()
     state_dict = torch.load(model_params_path, map_location=device)
+    if 'state_dict' in state_dict.keys():
+        state_dict = state_dict['state_dict']
+        def strip_data_parallel(s):
+            if s.startswith('module'):
+                return s[len('module.'):]
+            else:
+                return s
+        state_dict = {strip_data_parallel(k): v for k, v in state_dict.items()}
     model_base.load_state_dict(state_dict)
     model_base = model_base.to(device)
     return model_base

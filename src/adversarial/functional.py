@@ -73,9 +73,9 @@ def _iterative_gradient(model: Module,
         step: Size of step to make at each iteration
         eps: Maximum size of adversarial perturbation, larger perturbations will be projected back into the
             L_norm ball
-        norm: Type of norm
-        step_norm: 'inf' for PGD, 2 for iterated PGD (MEK: corrected)
-        y_target:
+        norm: Type of norm (used for projection), 'inf' for infinity-norm, any integer number for other norm
+        step_norm: Type of norm per each step, 'inf' for infinity-norm, any integer number for other norm
+        y_target: If None use untargeted attack, else y_target contain a batch of labels for targeted attack
         random: Whether to start Iterated FGSM within a random point in the l_norm ball
         clamp: Max and minimum values of elements in the samples i.e. (0, 1) for MNIST
 
