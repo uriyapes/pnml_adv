@@ -13,7 +13,8 @@ def fgsm(model: Module,
          loss_fn: Callable,
          eps: float,
          y_target = None,
-         clamp: Tuple[float, float] = (0, 1)) -> torch.Tensor:
+         clamp: Tuple[float, float] = (0, 1),
+         retain_graph=True) -> torch.Tensor:
     """Creates an adversarial sample using the Fast Gradient-Sign Method (FGSM)
 
     This is a white-box attack.
@@ -29,22 +30,30 @@ def fgsm(model: Module,
     Returns:
         x_adv: Adversarially perturbed version of x
     """
-    x = x.detach()
-    x.requires_grad = True
+    optimizer = torch.optim.SGD(model.parameters(), 0)
+    optimizer.zero_grad()
+    # x.grad = None
+    if x.grad is not None:
+        x.grad.detach_()
+        x.grad.zero_()
+    x_fgsm = x.clone().to(x.device)
+    x_fgsm.requires_grad_(True)
+    x_fgsm.retain_grad()  # backward don't calculate grad for non-leaf unless retain_grad() is invoked
     targeted = y_target is not None
-    prediction = model(x)
+    prediction = model(x_fgsm)
     loss = loss_fn(prediction, y_target if targeted else y)
-    loss.backward(retain_graph=True)
+    loss.backward(retain_graph=retain_graph)
 
     # x_adv = (x + torch.sign(x.grad) * eps).clamp(*clamp).detach()
     # x_adv = (x + x.grad + torch.sign(x.grad) * eps).detach()
     # x_grad_sign = 1.0/100 * x.grad.sign()
-    x_grad_sign = x.grad *500
+    # x_grad_sign = x.grad *500
+    x_grad_sign = torch.sign(x_fgsm.grad).detach()
     if not targeted:
-        x_adv = (x + x_grad_sign * eps).detach()#.clamp(*clamp)
+        x_adv = (x + x_grad_sign * eps).clamp(*clamp)  #.detach()
     else:
-        x_adv = (x - x_grad_sign * eps).detach()#.clamp(*clamp)
-    x.requires_grad = False
+        x_adv = (x - x_grad_sign * eps).clamp(*clamp)  #.detach()
+    # x_adv.requires_grad = False
     return x_adv
 
 
@@ -84,7 +93,7 @@ def _iterative_gradient(model: Module,
     """
     targeted = y_target is not None
     # x_adv = x.clone().detach().requires_grad_(True).to(x.device)
-    x_adv = x.clone().to(x.device)
+    x_adv = x.detach().clone().to(x.device)
     if random:
         # x_adv = random_perturbation(x_adv, norm, eps)
         rand_gen = torch.distributions.uniform.Uniform(x_adv - eps, x_adv + eps)  #Create a point around x_adv within a range of eps
@@ -98,9 +107,11 @@ def _iterative_gradient(model: Module,
         # The other option (original) is to work with temp variable _x_adv (see below) but it seems to prelong the
         # calculation time maybe as a result of re-cloning
         # _x_adv = x_adv.clone().detach().requires_grad_(True)
-        x_adv = x_adv
-        x_adv.requires_grad_(True)
+        # x_adv_old = x_adv.detach().clone()
+        x_adv = x_adv.detach()
+        x_adv.requires_grad_(True)  # TODO: remove in-place operation?
         prediction = model(x_adv)
+        # assert(torch.equal(x_adv, x_adv_old))
         loss = loss_fn(prediction, y_target if targeted else y).mean() - beta*model.regularization.mean()
         # loss.backward()
         # x_adv_grad = x_adv.grad
@@ -120,16 +131,16 @@ def _iterative_gradient(model: Module,
             if targeted:
                 # Targeted: Gradient descent on the loss of the (incorrect) target label
                 # w.r.t. the model parameters (increasing prob. to predict the incorrect label)
-                x_adv -= gradients
+                x_adv = x_adv - gradients
             else:
                 # Untargeted: Gradient ascent on the loss of the correct label w.r.t.
                 # the model parameters
-                x_adv += gradients
+                x_adv = x_adv + gradients
 
 
         # Project back into l_norm ball and correct range
-        x_adv = project(x, x_adv, norm, eps).clamp(*clamp)
-    x_adv = x_adv
+        x_adv = project(x, x_adv, norm, eps).clamp(*clamp).detach()
+    x_adv = x_adv.detach()
     # x_adv.requires_grad_(True) #  This is done so model with refinement could do backprop
     prediction = model(x_adv)
     adv_loss = loss_fn(prediction, y_target if targeted else y)

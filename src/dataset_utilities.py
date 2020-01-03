@@ -1,6 +1,6 @@
 import copy
 import os
-
+import time
 import numpy as np
 import os.path
 import torch
@@ -542,7 +542,7 @@ class MnistAdversarialTest(datasets.MNIST):
         assert(self.train is False)
         assert(start_idx >= 0 and end_idx < self.test_data.shape[0])
         test_samples = end_idx - start_idx + 1
-        grp_size = 100
+        grp_size = 500
         assert(test_samples % grp_size == 0)
         plt_img_list_idx = list(range(0,5))
 
@@ -558,12 +558,14 @@ class MnistAdversarialTest(datasets.MNIST):
         device = TorchUtils.get_device()
         assert(start_idx % grp_size == 0)
         assert ((end_idx+1) % grp_size == 0)
+        epoch_start_time = time.time()
         for index in range(int(start_idx/grp_size), int((end_idx+1) / grp_size)):
-            print(index)
             # save the adversarial testset
             self.adv_data[index*grp_size:(index+1)*grp_size] = attack.create_adversarial_sample(
                                                 self.adv_data[index*grp_size:(index+1)*grp_size].to(device),
                                                 self.test_labels[index*grp_size:(index+1)*grp_size].to(device)).detach()
+            print("Create MNIST adversarial testset, index: {}, time passed: {}".format(index,
+                                                                                        time.time() - epoch_start_time))
 
 
         # TODO: notice that all the 10000 samples are copied into test_data, this is done to keep the order of the idxs so during pNML the correct idxs are called but when evaluating the DS (without pNML) the result is incorrect
