@@ -45,12 +45,12 @@ mnist_min_val = (0 - mean_mnist) / mnist_std
 mnist_max_val = (1 - mean_mnist) / mnist_std
 
 
-class PnmlMnistClassifier(ModelTemplate):
-    def __init__(self, base_model, params):
+class PnmlModel(ModelTemplate):
+    def __init__(self, base_model, params, clamp):
         super().__init__()
         self.params = params
         self.gamma = params['epsilon']
-        self.clamp = (mnist_min_val, mnist_max_val)
+        self.clamp = clamp
         self.base_model = base_model
         self.refine = get_attack("fgsm", self.base_model, self.gamma, params["pgd_iter"], params["pgd_step"], False,
                                  self.clamp, 1)
@@ -92,7 +92,7 @@ class PnmlMnistClassifier(ModelTemplate):
         return self.base_model.state_dict()
 
 
-class PnmlMnistClassifier2(MNISTClassifier):
+class PnmlModel2(MNISTClassifier):
     def __init__(self, params, gamma=0.1):
         super().__init__()
         self.gamma = params['epsilon'] * (mnist_max_val - mnist_min_val)

@@ -92,10 +92,12 @@ def run_experiment(experiment_h):
     # Eval performance on datasets -
     # base_train_loss, base_train_acc = TrainClass.eval_model(model_base, dataloaders['train'])
     base_train_loss, base_train_acc = -1,-1 # TODO: REMOVE
-    base_test_loss, base_test_acc = TrainClass.eval_model(model_base, dataloaders['test'], loss_func='nll' if params_init_training["model_arch"] == 'PnmlMnistClassifier' else 'default')
+    base_test_loss, base_test_acc = TrainClass.eval_model(model_base, dataloaders['test'], loss_func='nll' if params_init_training["model_arch"] == 'PnmlModel' else 'default')
     logger.info('Base model ----- [Natural-train test] loss =[%f %f] acc=[%f %f]' %
                 (base_train_loss, base_test_loss, base_train_acc, base_test_acc))
-
+    if params['initial_training']['model_arch'] == "PnmlModel":
+        logger.info("PnmlModel - Finish experiment")
+        return 0
     ############################
     # Freeze layers
     logger.info('Freeze layer: %d' % params['freeze_layer'])
@@ -181,6 +183,8 @@ if __name__ == "__main__":
                         help='param file path used to load the parameters file containing default values to all '
                              'parameters', type=str)
     parser.add_argument('-e', '--test_eps', default=None, help='the epsilon strength of the attack', type=float)
+    parser.add_argument('-ts', '--test_step_size', default=None, help='the step size of the attack', type=float)
+    parser.add_argument('-ti', '--test_pgd_iter', default=None, help='the number of test pgd iterations', type=int)
     parser.add_argument('-r', '--lambda', default=None, help='the epsilon strength of the refinement (lambda)', type=float)
     parser.add_argument('-b', '--beta', default=None, help='the beta value for regret reduction regularization ', type=float)
     parser.add_argument('-i', '--fix_pgd_iter', default=None, help='the number of PGD iterations of the refinement', type=int)

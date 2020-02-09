@@ -19,7 +19,7 @@ do
                 printf "\ncuda_device=%s" "$cuda_device"
                 #if [ $idx -lt $((array_len-1)) ]
                 CUDA_VISIBLE_DEVICES=$cuda_device python ./src/main.py -t mnist_adversarial -r ${lambda_arr[idx]} -o output/mnist_eps_beta_search -i ${fix_iter[i]} -b ${beta_arr[b]} -n ${random_restart_num[n]}
-                sleep 2
+                sleep 4
             done
             cuda_device=$((first_cuda_device_index + idx))
             CUDA_VISIBLE_DEVICES=$cuda_device python ./src/main.py -t mnist_adversarial -r ${lambda_arr[idx]} -o output/mnist_eps_beta_search -i ${fix_iter[i]} -b ${beta_arr[b]} -n ${random_restart_num[n]}

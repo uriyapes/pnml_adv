@@ -398,12 +398,12 @@ class CIFAR10AdversarialTest(datasets.CIFAR10):
         assert(self.train is False)
         assert(start_idx >= 0 and end_idx < self.data.shape[0])
         test_samples = end_idx - start_idx + 1
-        grp_size = 100
+        grp_size = 50
         assert(test_samples % grp_size == 0)
 
         test_adv_data = torch.zeros([test_samples, 3, 32, 32])
         from utilities import plt_img
-        plt_img(self.data, [0])
+        # plt_img(self.data, [0])
         for index in range(test_samples):
             # use the transform on all the testset
             img = Image.fromarray(self.data[index+start_idx])
@@ -412,13 +412,15 @@ class CIFAR10AdversarialTest(datasets.CIFAR10):
         self.data = test_adv_data
         self.targets = torch.LongTensor(self.targets[start_idx:end_idx+1])
 
+        epoch_start_time = time.time()
         device = TorchUtils.get_device()
         for index in range(int(test_samples / grp_size)):
-            # print(index)
             # save the adversarial testset
             self.data[index * grp_size:(index + 1) * grp_size] = attack.create_adversarial_sample(
                 self.data[index * grp_size:(index + 1) * grp_size].to(device),
-                self.targets[index * grp_size:(index + 1) * grp_size].to(device))
+                self.targets[index * grp_size:(index + 1) * grp_size].to(device)).detach()
+            print("Create CIFAR adversarial testset, index: {}, time passed: {}".format(index,
+                                                                                        time.time() - epoch_start_time))
 
         self.data = self.data.to("cpu")
         self.transform = null_transform

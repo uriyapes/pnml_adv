@@ -8,7 +8,7 @@ from dataset_utilities import create_cifar10_random_label_dataloaders
 from dataset_utilities import create_mnist_dataloaders
 from dataset_utilities import create_svhn_dataloaders
 from dataset_utilities import dataloaders_noise
-from models.mpl import Net, Net_800_400_100, MNISTClassifier, PnmlMnistClassifier
+from models.mpl import Net, Net_800_400_100, MNISTClassifier, PnmlModel
 from models.resnet import resnet20, load_pretrained_resnet20_cifar10_model
 from models.wide_resnet_original import WideResNet
 from models.wide_resnet import WideResNet as MadryWideResNet
@@ -44,7 +44,11 @@ class Experiment:
             params['adv_attack_test']['test_start_idx'] = args['first_idx']
             params['adv_attack_test']['test_end_idx'] = args['last_idx']
         if args['test_eps'] is not None:
-            params['adv_attack_test']['epsilon'] = args['test_eps']  #TODO: change step size aswell
+            params['adv_attack_test']['epsilon'] = args['test_eps']
+        if args['test_step_size'] is not None:
+            params['adv_attack_test']['pgd_step'] = args['test_step_size']
+        if args['test_pgd_iter'] is not None:
+            params['adv_attack_test']['pgd_iter'] = args['test_pgd_iter']
         if args['beta'] is not None:
             params['adv_attack_test']['beta'] = args['beta']
 
@@ -170,23 +174,25 @@ class Experiment:
                 model = Net_800_400_100()
             elif model_arch == 'MNISTClassifier':
                 model = MNISTClassifier()
-            elif model_arch == 'PnmlMnistClassifier':
+            elif model_arch == 'PnmlModel':
                 model = MNISTClassifier()
             else:
                 raise NameError('No model_arch type %s for %s experiment' % (str(model_arch), self.exp_type))
             model = load_pretrained_model(model, ckpt_path) if ckpt_path is not None else model
 
-            if model_arch == 'PnmlMnistClassifier':
-                model = PnmlMnistClassifier(model, self.params['fit_to_sample'])
+            if model_arch == 'PnmlModel':
+                model = PnmlModel(model, self.params['fit_to_sample'], get_dataset_min_max_val(self.exp_type))
 
         elif self.exp_type == "cifar_adversarial":
             if model_arch == 'wide_resnet':
                 model = MadryWideResNet(depth=34, num_classes=10, widen_factor=10, dropRate=0.0)
-            elif model_arch == "RST": # Model used in "Unlabeled Data Improves Adversarial Robustness" paper, which has the same architecture as in the original WideResNet
+            elif model_arch == "RST" or model_arch == "PnmlModel": # Model used in "Unlabeled Data Improves Adversarial Robustness" paper, which has the same architecture as in the original WideResNet
                 model = WideResNet(depth=28, num_classes=10, widen_factor=10)
             else:
                 raise NameError('No model_arch type %s for %s experiment' % (str(model_arch), self.exp_type))
             model = load_pretrained_model(model, ckpt_path) if ckpt_path is not None else model
+            if model_arch == "PnmlModel":
+                model = PnmlModel(model, self.params['fit_to_sample'], get_dataset_min_max_val(self.exp_type))
         elif self.exp_type == "imagenet_adversarial":
             model = load_pretrained_imagenet_model(model_arch)
         elif self.exp_type == 'pnml_cifar10':
