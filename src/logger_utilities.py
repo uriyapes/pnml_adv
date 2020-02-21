@@ -3,7 +3,7 @@ import logging
 import os
 import sys
 import time
-
+import pickle
 import pathlib
 
 
@@ -16,7 +16,7 @@ class Logger:
         """
 
         # Create logger
-        logger = logging.getLogger()
+        logger = logging.getLogger("utilities_logger")
         logger.setLevel(logging.INFO)
 
         ch = logging.StreamHandler(sys.stdout)
@@ -125,3 +125,12 @@ class Logger:
         self.results_dict[str(test_idx_sample)]['original'] = {}
         self.results_dict[str(test_idx_sample)]['original']['prob'] = prob_org
         self.results_dict[str(test_idx_sample)]['true_label'] = int(true_label)
+
+    def dump_pickle(self, obj):
+        file_path = os.path.join(self.output_folder, 'adversarials.p')
+        pickle.dump(obj, open(file_path, "wb"))
+
+    @classmethod
+    def load_pickle(cls, path):
+        file_path = os.path.join(path, 'adversarials.p')
+        return pickle.load(open(file_path, "rb"))

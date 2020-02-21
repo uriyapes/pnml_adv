@@ -66,7 +66,7 @@ class Experiment:
     def get_params(self):
         return self.params
 
-    def get_adv_dataloaders(self, datafolder, p, model=None):
+    def get_adv_dataloaders(self, datafolder: str = './data', p=None, model=None):
         """
         :param experiment_h: experiment class instance
         :param datafolder: location of the data
@@ -74,6 +74,8 @@ class Experiment:
         :param model: the black/white-box model on which the attack will work, if None no attack will run
         :return: dataloaders dict
         """
+        if p is None:
+            p = {'attack_type': "no_attack"}
         if model is None or p['attack_type'] == "no_attack":
             attack = get_attack("no_attack")
         else:

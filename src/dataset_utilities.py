@@ -30,11 +30,17 @@ imagenet_max_val = 1
 shuffle_train_set = True
 
 
-def get_dataset_min_max_val(dataset_name: str):
+def get_dataset_min_max_val(dataset_name: str, dtype=None):
+    def _calc_normalized_val(val, mean, std, np_type):
+        assert(np_type == np.float32 or np_type == np.float64 or np_type is None)
+        if np_type is not None:
+            val = np.array([val], dtype=np_type)  # Calculate the normalized value with a certain dtype
+        return (val - mean) / std
+
     if dataset_name == 'cifar_adversarial':
         return cifar_min_val, cifar_max_val
     elif dataset_name == 'mnist_adversarial':
-        return mnist_min_val, mnist_max_val
+        return _calc_normalized_val(0, mean_mnist, mnist_std, dtype), _calc_normalized_val(1, mean_mnist, mnist_std, dtype)
     elif dataset_name == 'imagenet_adversarial':
         return imagenet_min_val, imagenet_max_val
     else:
@@ -544,43 +550,30 @@ class MnistAdversarialTest(datasets.MNIST):
         assert(self.train is False)
         assert(start_idx >= 0 and end_idx < self.test_data.shape[0])
         test_samples = end_idx - start_idx + 1
-        grp_size = 500
+        grp_size = 200
         assert(test_samples % grp_size == 0)
         plt_img_list_idx = list(range(0,5))
 
-        transform_data = torch.zeros([10000, 1, 28, 28])
+        transform_data = torch.zeros([test_samples, 1, 28, 28])
         from utilities import plt_img
         plt_img(self.test_data, plt_img_list_idx)
-        for index in range(start_idx, end_idx+1):
+        for index in range(int(test_samples)):
             # use the transform on all the testset
-            img = Image.fromarray(self.test_data[index].numpy(), mode='L')
+            img = Image.fromarray(self.test_data[index+start_idx].numpy(), mode='L')
             transform_data[index] = transform(img)
 
         self.adv_data = transform_data.clone()
+        self.targets = torch.LongTensor(self.targets[start_idx:end_idx + 1])
+
         device = TorchUtils.get_device()
-        assert(start_idx % grp_size == 0)
-        assert ((end_idx+1) % grp_size == 0)
         epoch_start_time = time.time()
-        for index in range(int(start_idx/grp_size), int((end_idx+1) / grp_size)):
+        for index in range(int(test_samples / grp_size)):
             # save the adversarial testset
             self.adv_data[index*grp_size:(index+1)*grp_size] = attack.create_adversarial_sample(
                                                 self.adv_data[index*grp_size:(index+1)*grp_size].to(device),
-                                                self.test_labels[index*grp_size:(index+1)*grp_size].to(device)).detach()
+                                                self.targets[index*grp_size:(index+1)*grp_size].to(device)).detach()
             print("Create MNIST adversarial testset, index: {}, time passed: {}".format(index,
                                                                                         time.time() - epoch_start_time))
-
-
-        # TODO: notice that all the 10000 samples are copied into test_data, this is done to keep the order of the idxs so during pNML the correct idxs are called but when evaluating the DS (without pNML) the result is incorrect
-
-        """
-        This method is pytorch version agnostic which returns the data buffer. 
-        """
-        # print(calc_norm(transform_data, self.adv_data.to("cpu")))
-        self.adv_data = self.adv_data[start_idx:end_idx+1]
-        # if torch.__version__ == '0.4.1':
-        #     self.test_data = self.adv_data[start_idx:end_idx+1].to("cpu")
-        # else:
-        #     self.data = self.adv_data[start_idx:end_idx+1].to("cpu")
 
         self.transform = null_transform
         if attack.name != 'NoAttack':
@@ -596,7 +589,7 @@ class MnistAdversarialTest(datasets.MNIST):
             tuple: (image, target) where target is index of the target class.
         """
 
-        target = self.test_labels[index]
+        target = self.targets[index]
         if self.target_transform is not None:
             target = self.target_transform(target)
         img = self.adv_data[index]

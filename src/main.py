@@ -175,8 +175,7 @@ def run_experiment(experiment_h):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Applications of Deep PNML')
     parser.add_argument('-t', '--experiment_type', default='mnist_adversarial',
-                        help='Type of experiment to execute',
-                        type=str)
+                        help='Type of experiment to execute', type=str)
     parser.add_argument('-f', '--first_idx', default=None, help='first test idx', type=int)
     parser.add_argument('-l', '--last_idx', default=None, help='last test idx', type=int)
     parser.add_argument('-p', '--param_file_path', default=os.path.join('src', 'params.json'),

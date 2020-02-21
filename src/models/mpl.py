@@ -52,12 +52,15 @@ class PnmlModel(ModelTemplate):
         self.gamma = params['epsilon']
         self.clamp = clamp
         self.base_model = base_model
-        self.refine = get_attack("fgsm", self.base_model, self.gamma, params["pgd_iter"], params["pgd_step"], False,
+        # self.refine = get_attack("fgsm", self.base_model, self.gamma, params["pgd_iter"], params["pgd_step"], False,
+        #                          self.clamp, 1)
+        self.refine = get_attack("pgd", self.base_model, self.gamma, params["pgd_iter"], params["pgd_step"], False,
                                  self.clamp, 1)
         self.loss_fn = torch.nn.CrossEntropyLoss(reduction='sum')  # reduction='none' The loss is config with reduction='none' so the grad of each sample won't be effected by other samples
         #     TODO : support larger batch sizes.
         self.regularization = torch.zeros([1])  # This value stores the risk
         # self.training = False
+
 
     def forward(self, x):
         num_classes = 10
@@ -74,7 +77,7 @@ class PnmlModel(ModelTemplate):
     def forward_genie(self, x, label):
         # x.requires_grad = True
         x_genie = self.refine.create_adversarial_sample(x, None, label)
-        return self.forward_base_model(x_genie)
+        return self.forward_base_model(x_genie, no_grad_flag=True)
 
     def forward_genie_sign_approx(self, x, label):
         x.requires_grad = True
@@ -85,8 +88,12 @@ class PnmlModel(ModelTemplate):
         x_genie = (x - adv_grad_sign * self.gamma * (mnist_max_val - mnist_min_val))
         return self.forward_base_model(x_genie)
 
-    def forward_base_model(self, x):
-        return self.base_model(x)
+    def forward_base_model(self, x, no_grad_flag=False):
+        if no_grad_flag:
+            with torch.no_grad():
+                return self.base_model(x)
+        else:
+            return self.base_model(x)
 
     def state_dict(self):
         return self.base_model.state_dict()
