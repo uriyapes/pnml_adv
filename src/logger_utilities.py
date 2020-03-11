@@ -126,8 +126,8 @@ class Logger:
         self.results_dict[str(test_idx_sample)]['original']['prob'] = prob_org
         self.results_dict[str(test_idx_sample)]['true_label'] = int(true_label)
 
-    def dump_pickle(self, obj):
-        file_path = os.path.join(self.output_folder, 'adversarials.p')
+    def dump_pickle(self, obj, file_name: str = 'adversarials.p'):
+        file_path = os.path.join(self.output_folder, file_name)
         pickle.dump(obj, open(file_path, "wb"))
 
     @classmethod

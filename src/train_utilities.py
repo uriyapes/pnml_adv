@@ -230,18 +230,18 @@ class TrainClass:
         model.eval()
         loss = 0
         correct = 0
-        with torch.no_grad():
-            for iter_num, (data, labels) in enumerate(dataloader):
-                print("eval_model iter_num: {}".format(iter_num))
-                data, labels = TorchUtils.to_device(data), TorchUtils.to_device(labels)
-                with torch.enable_grad():
-                    adv_data = attack.create_adversarial_sample(data, labels)
-                    outputs, batch_loss = cls.__forward_pass(model, adv_data, labels, loss_func)
-                loss += batch_loss * len(adv_data)  # loss sum for all the batch
-                _, predicted = torch.max(outputs.data, 1)
-                correct += (predicted == labels).sum().item()
-                if (predicted == labels).sum().item() == 1:
-                    print("correct prediction in iter_num: {}".format(iter_num))
+        # with torch.no_grad():
+        for iter_num, (data, labels) in enumerate(dataloader):
+            print("eval_model iter_num: {}".format(iter_num))
+            data, labels = TorchUtils.to_device(data), TorchUtils.to_device(labels)
+            # with torch.enable_grad():
+            data = attack.create_adversarial_sample(data, labels)
+            outputs, batch_loss = cls.__forward_pass(model, data, labels, loss_func)
+            loss += float(batch_loss.detach_()) * len(data)  # loss sum for all the batch
+            _, predicted = torch.max(outputs.detach_().data, 1)
+            correct += (predicted == labels).sum().item()
+            if (predicted == labels).sum().item() == 1:
+                print("correct prediction in iter_num: {}".format(iter_num))
 
         acc = correct / len(dataloader.dataset)
         loss /= len(dataloader.dataset)

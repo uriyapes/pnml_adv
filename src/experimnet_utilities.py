@@ -137,7 +137,7 @@ class Experiment:
                                                                     self.params['batch_size'], self.params['num_workers'],
                                                                     self.params['adv_attack_test']['test_start_idx'],
                                                                     self.params['adv_attack_test']['test_end_idx'])
-            adv_test_flag = True if attack.name is not "NoAttack" else False  # This flag indicates whether the testset is already adversarial
+            adv_test_flag = True if attack.name != "NoAttack" else False  # This flag indicates whether the testset is already adversarial
             dataloaders = {'train': trainloader,
                            'test': testloader,
                            'adv_test_flag': adv_test_flag,  # This flag indicates whether the testset is already adversarial
@@ -150,7 +150,7 @@ class Experiment:
             dataloaders['train'], dataloaders['classes'] = create_mnist_train_dataloader(data_folder,
                                                                  self.params['batch_size'], self.params['num_workers'])
 
-            dataloaders['adv_test_flag'] = True if attack.name is not "NoAttack" else False # This flag indicates whether the testset is already adversarial
+            dataloaders['adv_test_flag'] = True if attack.name != "NoAttack" else False # This flag indicates whether the testset is already adversarial
             dataloaders['test'], _ = create_adv_mnist_test_dataloader_preprocessed(attack, data_folder,
                                                                  self.params['batch_size'], self.params['num_workers'],
                                                                  self.params['adv_attack_test']['test_start_idx'],

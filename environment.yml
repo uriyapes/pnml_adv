@@ -1,0 +1,11 @@
+name: pnml_adv
+channels:
+  - pytorch
+dependencies:
+  - python=3.8
+  - torchvision
+  - cudatoolkit=9.2
+  - numpy
+  - pandas
+  - scipy
+  - matplotlib
