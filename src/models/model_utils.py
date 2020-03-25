@@ -46,7 +46,7 @@ def load_pretrained_model(model_base, model_params_path):
     return model_base
 
 
-def load_pretrained_imagenet_model(model_name):
+def load_pretrained_imagenet_model(model_name:str, pretrained: bool = True):
     """
     :param model_name: Could be one of the following:
         'alexnet',
@@ -75,11 +75,12 @@ def load_pretrained_imagenet_model(model_name):
          'vgg16_bn',
          'vgg19',
          'vgg19_bn'
+    :param: pretrained: Whether to return a pretrained model or not.
     :return: the trained model
     """
-    model = getattr(models, model_name)(pretrained=True)  # equivalent to models.resnet101(pretrained=True) for example
-    model_with_norm = ImagenetModel(model)
-    return TorchUtils.to_device(model_with_norm)
+    model = getattr(models, model_name)(pretrained=pretrained)  # equivalent to models.resnet101(pretrained=True) for example
+    # model_with_norm = ImagenetModel(model)
+    return TorchUtils.to_device(model)
 
 
 def per_image_standardization_tf(x: torch.Tensor):
@@ -148,4 +149,6 @@ class NormalizeCls(nn.Module):
         return (tensor - self.mean) / self.std
 
 
-
+def norm_imagenet_model(model):
+    model = nn.Sequential(NormalizeCls(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]), model)
+    return model

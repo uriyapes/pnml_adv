@@ -1,10 +1,12 @@
 name: pnml_adv
 channels:
   - pytorch
+  - conda-forge
 dependencies:
-  - python=3.8
+  - python
+  - pytorch
   - torchvision
-  - cudatoolkit=9.2
+  - cudatoolkit=10.1
   - numpy
   - pandas
   - scipy

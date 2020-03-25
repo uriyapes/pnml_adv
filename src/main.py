@@ -106,7 +106,7 @@ def run_experiment(experiment_h):
     ############################
     # Train ERM model to be as same as PNML
     params_fit_to_sample = params['fit_to_sample']
-    if params_fit_to_sample['pnml_train_or_fix'] is "train":
+    if params_fit_to_sample['pnml_train_or_fix'] == "train":
         model_erm = copy.deepcopy(model_base)
         train_class = TrainClass(filter(lambda p: p.requires_grad, model_erm.parameters()),
                                  params_fit_to_sample['lr'],

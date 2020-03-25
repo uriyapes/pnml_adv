@@ -7,12 +7,11 @@ from dataset_utilities import create_cifar10_dataloaders
 from dataset_utilities import create_cifar10_random_label_dataloaders
 from dataset_utilities import create_mnist_dataloaders
 from dataset_utilities import create_svhn_dataloaders
-from dataset_utilities import dataloaders_noise
 from models.mpl import Net, Net_800_400_100, MNISTClassifier, PnmlModel
 from models.resnet import resnet20, load_pretrained_resnet20_cifar10_model
 from models.wide_resnet_original import WideResNet
 from models.wide_resnet import WideResNet as MadryWideResNet
-from models.model_utils import load_pretrained_imagenet_model, load_pretrained_model
+from models.model_utils import load_pretrained_imagenet_model, load_pretrained_model, norm_imagenet_model
 from adversarial.attacks import get_attack
 from dataset_utilities import get_dataset_min_max_val
 
@@ -113,11 +112,6 @@ class Experiment:
                            'classes': classes_cifar10,
                            'classes_svhn': classes_svhn}
 
-        elif self.exp_type == 'out_of_dist_noise':
-            dataloaders = dataloaders_noise(data_folder,
-                                            self.params['batch_size'],
-                                            self.params['num_workers'])
-
         elif self.exp_type == 'pnml_mnist':
             trainloader, testloader, classes = create_mnist_dataloaders(data_folder,
                                                                         self.params['batch_size'],
@@ -128,8 +122,11 @@ class Experiment:
         elif self.exp_type == 'imagenet_adversarial':
             assert (attack is not None)
             testloader, classes = create_imagenet_test_loader(data_folder,
-                                                              self.params['batch_size'], self.params['num_workers'])
-            dataloaders = {'test':testloader,
+                                                              self.params['batch_size'], self.params['num_workers'],
+                                                              self.params['adv_attack_test']['test_start_idx'],
+                                                              self.params['adv_attack_test']['test_end_idx']
+                                                              )
+            dataloaders = {'test': testloader,
                            'classes': classes}
         elif self.exp_type == 'cifar_adversarial':
             assert(attack is not None)
@@ -196,7 +193,13 @@ class Experiment:
             if model_arch == "PnmlModel":
                 model = PnmlModel(model, self.params['fit_to_sample'], get_dataset_min_max_val(self.exp_type))
         elif self.exp_type == "imagenet_adversarial":
-            model = load_pretrained_imagenet_model(model_arch)
+            if model_arch == 'PnmlModel':
+                model = load_pretrained_imagenet_model("resnet50")
+                model = load_pretrained_model(model, ckpt_path)
+                model = norm_imagenet_model(model)
+            else:
+                model = load_pretrained_imagenet_model(model_arch)
+                model = norm_imagenet_model(model)
         elif self.exp_type == 'pnml_cifar10':
             model = load_pretrained_resnet20_cifar10_model(resnet20())
         else:

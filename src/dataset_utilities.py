@@ -8,7 +8,6 @@ from torch.utils import data
 from torchvision import transforms, datasets
 from PIL import Image
 from utilities import TorchUtils
-from noise_dataset_class import NoiseDataset
 
 # Normalization for CIFAR10 dataset
 mean_cifar10 = [0.485, 0.456, 0.406]
@@ -312,58 +311,26 @@ def create_cifar10_random_label_dataloaders(data_dir: str = './data', batch_size
     return trainloader, testloader, classes
 
 
-def dataloaders_noise(data_dir: str = './data', batch_size: int = 128, num_workers: int = 4):
-    """
-    create trainloader for CIFAR10 dataset and testloader with noise images
-    :param data_dir: the folder that will contain the data
-    :param batch_size: the size of the batch for test and train loaders
-    :param num_workers: number of cpu workers which loads the GPU with the dataset
-    :return: train and test loaders along with mapping between labels and class names
-    """
-    trainset = datasets.CIFAR10(root=data_dir,
-                                train=True,
-                                download=True,
-                                transform=transforms.Compose([transforms.ToTensor(),
-                                                              normalize_cifar]))
-    trainloader = data.DataLoader(trainset,
-                                  batch_size=batch_size,
-                                  shuffle=False,
-                                  num_workers=num_workers)
-
-    testset = NoiseDataset(root=data_dir,
-                           transform=transforms.Compose([transforms.ToTensor(),
-                                                         normalize_cifar]))
-    testloader = data.DataLoader(testset,
-                                 batch_size=batch_size,
-                                 shuffle=False,
-                                 num_workers=num_workers)
-    classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
-
-    dataloaders = {'train': trainloader,
-                   'test': testloader,
-                   'classes': classes,
-                   'classes_noise': ('Noise',) * 10}
-    return dataloaders
-
-
-def create_imagenet_test_loader(data_dir: str = './data', batch_size: int = 128, num_workers: int = 4):
+def create_imagenet_test_loader(data_dir: str = './data', batch_size: int = 128, num_workers: int = 4, start_idx=0, end_idx=9999):
     # normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
     #                                  std=[0.229, 0.224, 0.225])
     imagenet_transform = transforms.Compose([
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
+            # transforms.Resize(256),
+            transforms.CenterCrop(288),
             transforms.ToTensor(),
             # normalize,
         ])
     data_dir = data_dir + '/imagenet/test'
     testset = datasets.ImageNet(root=data_dir,
                                  split='val',
-                                 download=True,
+                                 download=False,
                                  transform=imagenet_transform)
+    testset = data.Subset(testset, indices=range(start_idx, end_idx))
     testloader = data.DataLoader(testset,
                                  batch_size=batch_size,
                                  shuffle=False,
-                                 num_workers=num_workers)
+                                 num_workers=num_workers,
+                                 pin_memory=True)
 
     classes = [str(i) for i in range(1000)]
     return testloader, classes
