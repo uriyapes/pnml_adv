@@ -23,7 +23,7 @@ TorchUtils.set_device(None)  # cuda:{gpu number} for example 'cuda:0' or 'cpu' o
 torch.set_anomaly_enabled(True)
 """
 Example of running:
-CUDA_VISIBLE_DEVICES=0 python src/main.py -t pnml_cifar10
+CUDA_VISIBLE_DEVICES=0 python src/main.py -t mnist_adversarial
 """
 
 def run_experiment(experiment_h):
@@ -58,7 +58,7 @@ def run_experiment(experiment_h):
     # Run basic training- so the base model will be in the same conditions as NML model
     params_init_training = params['initial_training']
     logger.info('Load model')
-    model_base = experiment_h.get_model(params_init_training['model_arch'], params_init_training['pretrained_model_path'])
+    model_base = experiment_h.get_model(params_init_training['model_arch'], params_init_training['pretrained_model_path'], params_init_training["pnml_active"])
     if 'initial_training' in params and params['initial_training']['do_initial_training'] is True:
         logger.info('Execute basic training')
         train_class = TrainClass(filter(lambda p: p.requires_grad, model_base.parameters()),
@@ -92,7 +92,7 @@ def run_experiment(experiment_h):
     # Eval performance on datasets -
     # base_train_loss, base_train_acc = TrainClass.eval_model(model_base, dataloaders['train'])
     base_train_loss, base_train_acc = -1,-1 # TODO: REMOVE
-    base_test_loss, base_test_acc = TrainClass.eval_model(model_base, dataloaders['test'], loss_func='nll' if params_init_training["model_arch"] == 'PnmlModel' else 'default')
+    base_test_loss, base_test_acc = TrainClass.eval_model(model_base, dataloaders['test'], loss_func='nll' if params_init_training["pnml_active"] == True else 'default')
     logger.info('Base model ----- [Natural-train test] loss =[%f %f] acc=[%f %f]' %
                 (base_train_loss, base_test_loss, base_train_acc, base_test_acc))
     if params['initial_training']['model_arch'] == "PnmlModel":
@@ -170,6 +170,8 @@ def run_experiment(experiment_h):
     logger.info("number of test samples:{}".format(result_df.shape[0]))
 
     logger.info('Finish All!')
+
+
 
 
 if __name__ == "__main__":

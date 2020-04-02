@@ -3,24 +3,19 @@ import json
 from dataset_utilities import create_mnist_train_dataloader, create_adv_mnist_test_dataloader_preprocessed
 from dataset_utilities import create_imagenet_test_loader
 from dataset_utilities import create_adversarial_cifar10_dataloaders
-from dataset_utilities import create_cifar10_dataloaders
-from dataset_utilities import create_cifar10_random_label_dataloaders
 from dataset_utilities import create_mnist_dataloaders
-from dataset_utilities import create_svhn_dataloaders
+# from dataset_utilities import create_svhn_dataloaders
 from models.mpl import Net, Net_800_400_100, MNISTClassifier, PnmlModel
-from models.resnet import resnet20, load_pretrained_resnet20_cifar10_model
 from models.wide_resnet_original import WideResNet
-from models.wide_resnet import WideResNet as MadryWideResNet
-from models.model_utils import load_pretrained_imagenet_model, load_pretrained_model, norm_imagenet_model
+from models.madry_wide_resnet import MadryWideResNet
+from models.model_utils import load_pretrained_imagenet_model, load_pretrained_model, ImagenetModel
 from adversarial.attacks import get_attack
 from dataset_utilities import get_dataset_min_max_val
 
 
 class Experiment:
     def __init__(self, args):
-
-        if args['experiment_type'] not in ['pnml_cifar10',
-                            'random_labels',
+        if args['experiment_type'] not in [
                             'out_of_dist_svhn',
                             'out_of_dist_noise',
                             'pnml_mnist',
@@ -67,7 +62,6 @@ class Experiment:
 
     def get_adv_dataloaders(self, datafolder: str = './data', p=None, model=None):
         """
-        :param experiment_h: experiment class instance
         :param datafolder: location of the data
         :param p: (dict) the adversarial attack parameters
         :param model: the black/white-box model on which the attack will work, if None no attack will run
@@ -85,52 +79,38 @@ class Experiment:
         return self.get_dataloaders(datafolder, attack)
 
     def get_dataloaders(self, data_folder: str = './data', attack=None):
-        if self.exp_type == 'pnml_cifar10':
-            trainloader, testloader, classes = create_cifar10_dataloaders(data_folder,
-                                                                          self.params['batch_size'],
-                                                                          self.params['num_workers'])
-            dataloaders = {'train': trainloader,
-                           'test': testloader,
-                           'classes': classes}
-        elif self.exp_type == 'random_labels':
-            trainloader, testloader, classes = create_cifar10_random_label_dataloaders(data_folder,
-                                                                                       self.params['batch_size'],
-                                                                                       self.params['num_workers'],
-                                                                                       label_corrupt_prob=self.params[
-                                                                                           'label_corrupt_prob'])
-            dataloaders = {'train': trainloader,
-                           'test': testloader,
-                           'classes': classes}
-        elif self.exp_type == 'out_of_dist_svhn':
-            trainloader, testloader_svhn, classes_svhn, classes_cifar10 = create_svhn_dataloaders(data_folder,
-                                                                                                  self.params[
-                                                                                                      'batch_size'],
-                                                                                                  self.params[
-                                                                                                      'num_workers'])
-            dataloaders = {'train': trainloader,
-                           'test': testloader_svhn,
-                           'classes': classes_cifar10,
-                           'classes_svhn': classes_svhn}
-
-        elif self.exp_type == 'pnml_mnist':
-            trainloader, testloader, classes = create_mnist_dataloaders(data_folder,
+        if self.exp_type == 'pnml_mnist':
+            trainloader, testloader, classes, bounds = create_mnist_dataloaders(data_folder,
                                                                         self.params['batch_size'],
                                                                         self.params['num_workers'])
             dataloaders = {'train': trainloader,
                            'test': testloader,
-                           'classes': classes}
+                           'classes': classes,
+                           'bounds': bounds}
+        # elif self.exp_type == 'out_of_dist_svhn':
+        #     trainloader, testloader_svhn, classes_svhn, classes_cifar10 = create_svhn_dataloaders(data_folder,
+        #                                                                                           self.params[
+        #                                                                                               'batch_size'],
+        #                                                                                           self.params[
+        #                                                                                               'num_workers'])
+        #     dataloaders = {'train': trainloader,
+        #                    'test': testloader_svhn,
+        #                    'classes': classes_cifar10,
+        #                    'classes_svhn': classes_svhn}
         elif self.exp_type == 'imagenet_adversarial':
             assert (attack is not None)
-            testloader, classes = create_imagenet_test_loader(data_folder,
+            testloader, classes, bounds = create_imagenet_test_loader(data_folder,
                                                               self.params['batch_size'], self.params['num_workers'],
                                                               self.params['adv_attack_test']['test_start_idx'],
-                                                              self.params['adv_attack_test']['test_end_idx']
+                                                              self.params['adv_attack_test']['test_end_idx'],
+                                                              self.params["num_classes"]
                                                               )
             dataloaders = {'test': testloader,
-                           'classes': classes}
+                           'classes': classes,
+                           'bounds': bounds}
         elif self.exp_type == 'cifar_adversarial':
             assert(attack is not None)
-            trainloader, testloader, classes = create_adversarial_cifar10_dataloaders(attack, data_folder,
+            trainloader, testloader, classes, bounds = create_adversarial_cifar10_dataloaders(attack, data_folder,
                                                                     self.params['batch_size'], self.params['num_workers'],
                                                                     self.params['adv_attack_test']['test_start_idx'],
                                                                     self.params['adv_attack_test']['test_end_idx'])
@@ -138,32 +118,34 @@ class Experiment:
             dataloaders = {'train': trainloader,
                            'test': testloader,
                            'adv_test_flag': adv_test_flag,  # This flag indicates whether the testset is already adversarial
-                           'classes': classes
-                            }
+                           'classes': classes, 'bounds': bounds}
 
         elif self.exp_type == 'mnist_adversarial':
             assert(attack is not None)
             dataloaders = dict()
-            dataloaders['train'], dataloaders['classes'] = create_mnist_train_dataloader(data_folder,
+            dataloaders['train'], dataloaders['classes'], bounds_train = create_mnist_train_dataloader(data_folder,
                                                                  self.params['batch_size'], self.params['num_workers'])
 
             dataloaders['adv_test_flag'] = True if attack.name != "NoAttack" else False # This flag indicates whether the testset is already adversarial
-            dataloaders['test'], _ = create_adv_mnist_test_dataloader_preprocessed(attack, data_folder,
+            dataloaders['test'], _, bounds_test = create_adv_mnist_test_dataloader_preprocessed(attack, data_folder,
                                                                  self.params['batch_size'], self.params['num_workers'],
                                                                  self.params['adv_attack_test']['test_start_idx'],
                                                                   self.params['adv_attack_test']['test_end_idx'])
+            assert(bounds_train == bounds_test)
+            dataloaders['bounds'] = bounds_train
         else:
             raise NameError('No experiment type: %s' % self.exp_type)
 
         dataloaders['dataset_name'] = self.exp_type
         return dataloaders
 
-    def get_model(self, model_arch: str, ckpt_path: str):
+    def get_model(self, model_arch: str, ckpt_path: str, pnml_model_flag: bool = False):
         """
         Load a untrained or trained model according to the experiment type and if a ckpt_path is given.
         :param model_arch: the architecture of the model
         :param ckpt_path: the path to the model .ckpt file. If no ckpt_path is given then the initial model is loaded
-        :return:
+        :param pnml_model_flag: If true, return PnmlModel of the loaded model
+        :return: A NN model
         """
         ckpt_path = None if ckpt_path == "None" else ckpt_path
         if self.exp_type == "mnist_adversarial":
@@ -177,41 +159,28 @@ class Experiment:
                 model = MNISTClassifier()
             else:
                 raise NameError('No model_arch type %s for %s experiment' % (str(model_arch), self.exp_type))
-            model = load_pretrained_model(model, ckpt_path) if ckpt_path is not None else model
-
-            if model_arch == 'PnmlModel':
-                model = PnmlModel(model, self.params['fit_to_sample'], get_dataset_min_max_val(self.exp_type))
-
         elif self.exp_type == "cifar_adversarial":
             if model_arch == 'wide_resnet':
                 model = MadryWideResNet(depth=34, num_classes=10, widen_factor=10, dropRate=0.0)
-            elif model_arch == "RST" or model_arch == "PnmlModel": # Model used in "Unlabeled Data Improves Adversarial Robustness" paper, which has the same architecture as in the original WideResNet
+            elif model_arch == "RST": # Model used in "Unlabeled Data Improves Adversarial Robustness" paper, which has the same architecture as in the original WideResNet
                 model = WideResNet(depth=28, num_classes=10, widen_factor=10)
             else:
                 raise NameError('No model_arch type %s for %s experiment' % (str(model_arch), self.exp_type))
-            model = load_pretrained_model(model, ckpt_path) if ckpt_path is not None else model
-            if model_arch == "PnmlModel":
-                model = PnmlModel(model, self.params['fit_to_sample'], get_dataset_min_max_val(self.exp_type))
         elif self.exp_type == "imagenet_adversarial":
-            if model_arch == 'PnmlModel':
+            if model_arch == 'resnet50':
                 model = load_pretrained_imagenet_model("resnet50")
-                model = load_pretrained_model(model, ckpt_path)
-                model = norm_imagenet_model(model)
-            else:
-                model = load_pretrained_imagenet_model(model_arch)
-                model = norm_imagenet_model(model)
-        elif self.exp_type == 'pnml_cifar10':
-            model = load_pretrained_resnet20_cifar10_model(resnet20())
         else:
             raise NameError('No experiment type: %s' % self.exp_type)
+
+        model = load_pretrained_model(model, ckpt_path) if ckpt_path is not None else model
+        model = ImagenetModel(model, self.params["num_classes"]) if self.exp_type == "imagenet_adversarial" else model
+        if pnml_model_flag:
+            model = PnmlModel(model, self.params['fit_to_sample'], get_dataset_min_max_val(self.exp_type), self.params["num_classes"])
+
         return model
 
     def get_exp_name(self):
-        if self.exp_type == 'pnml_cifar10':
-            name = 'pnml_cifar10'
-        elif self.exp_type == 'random_labels':
-            name = 'random_labels'
-        elif self.exp_type == 'out_of_dist_svhn':
+        if self.exp_type == 'out_of_dist_svhn':
             name = 'out_of_dist_svhn'
         elif self.exp_type == 'out_of_dist_noise':
             name = 'out_of_dist_noise'
@@ -227,3 +196,8 @@ class Experiment:
             raise NameError('No experiment type: %s' % self.exp_type)
 
         return name
+
+    def get_attack_for_model(self, model):
+        p = self.params["adv_attack_test"]
+        return get_attack(p['attack_type'], model, p['epsilon'], p['pgd_iter'], p['pgd_step'], p['pgd_rand_start'],
+                          get_dataset_min_max_val(self.exp_type), p['pgd_test_restart_num'], beta=p['beta'])

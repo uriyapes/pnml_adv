@@ -6,8 +6,6 @@ import pandas as pd
 from scipy.stats import entropy
 import glob
 pd.set_option('display.max_columns', 500)
-# Import tesloader for random label experiment
-# _, testloader, _ = create_cifar10_dataloaders('../data/', 1, 1)
 
 
 def extract_probabilities_list(evaluation_dict):

@@ -1,6 +1,54 @@
 # Code is based on https://github.com/oscarknagg/adversarial
+from typing import Union
 from abc import ABC, abstractmethod
 from adversarial.functional import *
+import torch
+import os
+
+
+class Adversarials(object):
+    def __init__(self, attack_params: dict, original_sample: torch.Tensor, true_label: torch.Tensor, probability: torch.Tensor, loss: torch.Tensor,
+                  adversarial_sample=None, genie_prob=None):
+        """
+
+        :param original_sample: The original data (non adversarial)
+        :param true_label: The true label
+        :param probability: The adversarial_sample (original_sample if adversarial_sample=None) probabilities for each label
+        :param loss: cross-entropy loss (this is not calculated using probabilities because torch.log_softmax(logits))
+                                        is more numerical stable than torch.log(probabilities))
+        :param adversarial_sample: Adversarial sample (if exist)
+        :param genie_prob: Genie probability from PnmlModel (if exist)
+        """
+        self.attack_params = attack_params
+        # TODO: pre-allocate memory in advance using dataset shape
+        self.original_sample = original_sample.cpu()
+        self.true_label = true_label.cpu()
+        self.adversarial_sample = adversarial_sample.cpu() if adversarial_sample is not None else None
+        self.probability = probability.cpu()
+        self.predict = torch.max(probability, 1)[1].cpu()
+        self.correct = (self.predict == self.true_label)
+        self.loss = loss.cpu()
+        if genie_prob is not None:
+            self.genie_prob = genie_prob.cpu()
+            self.regret = torch.log(self.genie_prob.sum(dim=1, keepdim=False))
+        else:
+            self.genie_prob = None
+            self.regret = None
+
+    def merge(self, adv):
+        self.original_sample = torch.cat([self.original_sample, adv.original_sample], dim=0)
+        self.true_label = torch.cat([self.true_label, adv.true_label])
+        self.adversarial_sample = torch.cat([self.adversarial_sample, adv.adversarial_sample]) if adv.adversarial_sample is not None else None
+        self.probability = torch.cat([self.probability, adv.probability])
+        self.predict = torch.cat([self.predict, adv.predict])
+        self.correct = torch.cat([self.correct, adv.correct])
+        self.loss = torch.cat([self.loss, adv.loss])
+        if self.genie_prob is not None:
+            self.genie_prob = torch.cat([self.genie_prob, adv.genie_prob])
+            self.regret = torch.cat([self.regret, torch.log(adv.genie_prob.sum(dim=1, keepdim=False))])
+
+    def dump(self, path_to_folder):
+        torch.save(self, os.path.join(path_to_folder, "adversarials.t"))
 
 
 class Attack(ABC):
@@ -95,9 +143,16 @@ class PGD(Attack):
     def create_adversarial_sample(self,
                                   x: torch.Tensor,
                                   y: torch.Tensor,
-                                  y_target: torch.Tensor = None) -> torch.Tensor:
-        return iterated_fgsm(self.model, x, y, self.loss_fn, self.k, self.step, self.eps, self.norm, y_target=y_target,
-                             random=self.random, clamp=self.clamp, restart_num=self.restart_num, beta=self.beta, flip_grad_ratio=self.flip_grad_ratio)
+                                  y_target: torch.Tensor = None,
+                                  get_adversarial_class: bool = False) -> Union[torch.Tensor, Adversarials]:
+        adv_sample, adv_loss, adv_pred, genie_pred = iterated_fgsm(self.model, x, y, self.loss_fn, self.k, self.step, self.eps,
+                                                       self.norm, y_target=y_target, random=self.random, clamp=self.clamp,
+                                                       restart_num=self.restart_num, beta=self.beta, flip_grad_ratio=self.flip_grad_ratio)
+        if get_adversarial_class:
+            adversarials = Adversarials(self.__dict__, x, y, adv_pred, adv_loss, adv_sample, genie_pred)
+            return adversarials
+        else:
+            return adv_sample
 
 
 class Boundary(Attack):

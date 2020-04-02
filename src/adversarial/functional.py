@@ -42,13 +42,16 @@ def fgsm(model: Module,
     targeted = y_target is not None
     prediction = model(x_fgsm)
     loss = loss_fn(prediction, y_target if targeted else y)
-    loss.backward(retain_graph=retain_graph)
+    # loss.backward(retain_graph=retain_graph)
+    x_adv_grad = torch.autograd.grad(loss, x_fgsm, create_graph=False)[0]
+    # x_adv_grad = x_fgsm.grad
 
     # x_adv = (x + torch.sign(x.grad) * eps).clamp(*clamp).detach()
     # x_adv = (x + x.grad + torch.sign(x.grad) * eps).detach()
     # x_grad_sign = 1.0/100 * x.grad.sign()
     # x_grad_sign = x.grad *500
-    x_grad_sign = torch.sign(x_fgsm.grad).detach()
+
+    x_grad_sign = torch.sign(x_adv_grad).detach()
     if not targeted:
         x_adv = (x + x_grad_sign * eps).clamp(*clamp)  #.detach()
     else:
@@ -70,7 +73,7 @@ def _iterative_gradient(model: Module,
                         random: bool = False,
                         clamp: Tuple[float, float] = (0, 1),
                         beta=0.0,
-                        flip_grad_ratio: float = 0.0) -> Tuple[torch.Tensor, int]:
+                        flip_grad_ratio: float = 0.0) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """Base function for PGD and iterated FGSM
 
     Args:
@@ -90,7 +93,12 @@ def _iterative_gradient(model: Module,
 
     Returns:
         x_adv: Adversarially perturbed version of x
+        adv_loss: The loss of the aversarial sample
+        prediction: The predictions for the adversarial sample
+        genie_prob: The probability of the genie (if exist, else None)
     """
+
+    loss_fn = torch.nn.NLLLoss(reduction='none')
     targeted = y_target is not None
     # x_adv = x.clone().detach().requires_grad_(True).to(x.device)
     x_adv = x.detach().clone().to(x.device)
@@ -102,16 +110,15 @@ def _iterative_gradient(model: Module,
     for i in range(k):
         # print("_iterative_gradient iter: {}".format(i))
         # Each new loop x_adv is a new variable (x_adv += gradients), therefore we must detach it (otherwise backward()
-        # will result in calculating the old clones gradients as well) and then requires_grad_(True) since detach()
+        # will result in calculating the old clones gradients as well and memory overflow) and then requires_grad_(True) since detach()
         # disabled the grad.
         # The other option (original) is to work with temp variable _x_adv (see below) but it seems to prelong the
         # calculation time maybe as a result of re-cloning
         # _x_adv = x_adv.clone().detach().requires_grad_(True)
         # x_adv_old = x_adv.detach().clone()
         x_adv = x_adv.detach()
-        x_adv.requires_grad_(True)  # TODO: remove in-place operation?
-        prediction = model(x_adv)
-        # assert(torch.equal(x_adv, x_adv_old))
+        x_adv = x_adv.requires_grad_(True)
+        prediction = model.calc_log_prob(x_adv)
         loss = loss_fn(prediction, y_target if targeted else y).mean() - beta*model.regularization.mean()
         # loss.backward()
         # x_adv_grad = x_adv.grad
@@ -142,11 +149,21 @@ def _iterative_gradient(model: Module,
         x_adv = project(x, x_adv, norm, eps).clamp(*clamp).detach()
     x_adv = x_adv.detach()
     # x_adv.requires_grad_(True) #  This is done so model with refinement could do backprop
-    prediction = model(x_adv)
-    adv_loss = loss_fn(prediction, y_target if targeted else y)
+
+    # TODO: next section could be with torch.no_grad if not pnml model
+    logits_or_prob = model(x_adv).detach()  # could be logits or probability
+    if model.pnml_model:
+        prediction = logits_or_prob.detach()
+        log_prob = torch.log(logits_or_prob).detach()
+        genie_prob = model.get_genie_prob().detach()
+    else:  # if Logits:
+        prediction = torch.softmax(logits_or_prob, 1).detach()
+        log_prob = torch.log_softmax(logits_or_prob, 1).detach()
+        genie_prob = None
+    adv_loss = loss_fn(log_prob, y_target if targeted else y).detach()
     x_adv.requires_grad_ = False
 
-    return x_adv, adv_loss
+    return x_adv, adv_loss, prediction, genie_prob
 
 
 def iterated_fgsm(model: Module,
@@ -162,7 +179,7 @@ def iterated_fgsm(model: Module,
                   clamp: Tuple[float, float] = (0, 1),
                   restart_num: int = 1,
                   beta = 0.0075,
-                  flip_grad_ratio: float = 0.0) -> torch.Tensor:
+                  flip_grad_ratio: float = 0.0) -> (torch.Tensor, torch.Tensor, torch.Tensor):
     """Creates an adversarial sample using the iterated Fast Gradient-Sign Method
 
     This is a white-box attack.
@@ -184,6 +201,8 @@ def iterated_fgsm(model: Module,
 
     Returns:
         x_adv: Adversarially perturbed version of x
+        adv_loss: The loss of the aversarial sample x
+        prediction: The predictions for the adversarial sample x
     """
     assert((random is False and restart_num == 1) or (random is True and restart_num >= 1))
     # is_model_training_flag = model.training
@@ -193,31 +212,42 @@ def iterated_fgsm(model: Module,
     max_loss = -1
     x_adv_l = []
     loss_l = []
+    prediction_l = []
+    genie_prob_l = []
     # We want to get the element-wise loss to decide which sample has the highest loss compared to the other random
     # start. Make sure the loss_fn that was received is cross-entropy
     loss_fn = loss_fn(reduction='none')
     for i in range(restart_num):
-        x_adv, loss = _iterative_gradient(model=model, x=x, y=y, loss_fn=loss_fn, k=k, eps=eps, norm=norm, step=step,
+        x_adv, loss, prediction, genie_prob = _iterative_gradient(model=model, x=x, y=y, loss_fn=loss_fn, k=k, eps=eps, norm=norm, step=step,
                                    step_norm='inf', y_target=y_target, random=random, clamp=clamp, beta=beta, flip_grad_ratio=flip_grad_ratio)
         x_adv_l.append(x_adv)
         loss_l.append(loss)
+        prediction_l.append(prediction)
+        genie_prob_l.append(genie_prob)
         # print("loss in iter{}:".format(i) + str(loss))
         # if loss > max_loss:
         #     best_adv = x_adv
 
-    if restart_num == 1:
-        best_adv = x_adv_l[0]
+    if restart_num == 1:  # TODO: This isn't needed
+        chosen_adv = x_adv_l[0]
+        chosen_loss = loss_l[0]
+        chosen_prediction = prediction_l[0]
+        chosen_genie_prob = genie_prob_l[0]
     else:
         x_adv_stack = torch.stack(x_adv_l)
         loss_stack = torch.stack(loss_l)
+        prediction_stack = torch.stack(prediction_l)
         if y_target is None:
             best_loss_ind = torch.argmax(loss_stack, dim=0).tolist()  # find the maximum loss between all the random starts
         else:
             best_loss_ind = torch.argmin(loss_stack, dim=0).tolist()  # find the minimum loss for the specified y_target
-        best_adv = x_adv_stack[best_loss_ind, range(x_adv_stack.size()[1])]  # make max_loss_ind numpy
+        chosen_adv = x_adv_stack[best_loss_ind, range(x_adv_stack.size()[1])]  # make max_loss_ind numpy
+        chosen_loss = loss_stack[best_loss_ind, range(x_adv_stack.size()[1])]
+        chosen_prediction = prediction_stack[best_loss_ind, range(x_adv_stack.size()[1])]
+        chosen_genie_prob = torch.stack(genie_prob_l)[best_loss_ind, range(x_adv_stack.size()[1])] if genie_prob_l[0] is not None else None
     model.unfreeze_all_layers()
     # model.train(is_model_training_flag)
-    return best_adv
+    return chosen_adv, chosen_loss, chosen_prediction, chosen_genie_prob
 
 
 def boundary(model: Module,

@@ -6,6 +6,18 @@ import time
 import pickle
 import pathlib
 
+logger_l = []
+
+
+def init_logger(experiment_type: str, output_root: str):
+    assert len(logger_l) == 0
+    logger_l.append(Logger(experiment_type, output_root))
+
+
+def get_logger():
+    assert len(logger_l) == 1
+    return logger_l[0]
+
 
 class Logger:
     def __init__(self, experiment_type: str, output_root: str):
