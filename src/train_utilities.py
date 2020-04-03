@@ -21,7 +21,7 @@ class TrainClass:
     criterion = nn.CrossEntropyLoss()
     def __init__(self, params_to_train, learning_rate: float, momentum: float, step_size: list, gamma: float,
                  weight_decay: float, logger=None, adv_learn_alpha=0, adv_learn_eps=0.05, attack_type: str = 'pgd',
-                 pgd_iter: int = 30, pgd_step: float = 0.01, pgd_random: bool = True, save_model_every_n_epoch = float('Inf')):
+                 pgd_iter: int = 30, pgd_step: float = 0.01, restart_num: int = 1, save_model_every_n_epoch = float('Inf')):
         """
         Initialize train class object.
         :param params_to_train: the parameters of pytorch Module that will be trained.
@@ -56,7 +56,7 @@ class TrainClass:
         self.attack_type = attack_type
         self.pgd_iter = pgd_iter
         self.pgd_step = pgd_step
-        self.pgd_random = pgd_random
+        self.restart_num = restart_num
 
     def train_model(self, model, dataloaders, num_epochs: int = 10, acc_goal=None, eval_test_every_n_epoch: int = 1,
                     sample_test_data=None, sample_test_true_label=None):
@@ -71,8 +71,9 @@ class TrainClass:
         """
         self.logger.info("Use device:" + TorchUtils.get_device())
         model = TorchUtils.to_device(model)
+        assert(0)  #  TODO: fix get_attack
         attack = get_attack(self.attack_type, model, self.adv_learn_eps, self.pgd_iter, self.pgd_step,
-                            self.pgd_random, get_dataset_min_max_val(dataloaders['dataset_name']))
+                            self.restart_num, get_dataset_min_max_val(dataloaders['dataset_name']))
 
         # If testset is already adversarial then do nothing else use the same attack to generate adversarial testset
         testset_attack = get_attack("no_attack") if dataloaders['adv_test_flag'] else attack  # TODO: replace training attack with testing attack
@@ -437,7 +438,7 @@ def execute_pnml_adv_fix(pnml_params: dict, params_init_training: dict, dataload
     model = deepcopy(model_base_input)
     model.eval()
     refinement = get_attack(pnml_params['fix_type'], model, pnml_params['epsilon'], pnml_params['pgd_iter'],
-                           pnml_params['pgd_step'], pnml_params['pgd_rand_start'], get_dataset_min_max_val(dataloaders_input['dataset_name']),
+                           pnml_params['pgd_step'], get_dataset_min_max_val(dataloaders_input['dataset_name']),
                            pnml_params['pgd_test_restart_num'], flip_grad_ratio=0.0)
     for fix_to_label in trained_label_list:
         time_trained_label_start = time.time()

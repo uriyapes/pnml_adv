@@ -14,7 +14,7 @@ from dataset_utilities import get_dataset_min_max_val
 
 
 class Experiment:
-    def __init__(self, args):
+    def __init__(self, args, cli_params):
         if args['experiment_type'] not in [
                             'out_of_dist_svhn',
                             'out_of_dist_noise',
@@ -25,6 +25,7 @@ class Experiment:
             raise NameError('No experiment type: %s' % type)
         self.exp_type = args['experiment_type']
         self.params = self.__load_params_from_file(args, self.exp_type)
+        self.__update_params_from_cli(cli_params)
         self.output_dir = args['output_root']
 
     @staticmethod
@@ -33,29 +34,13 @@ class Experiment:
         with open(param_file_path) as f:         # Load the params for all experiments from param_file_path
             params = json.load(f)
         params = params[exp_type]
-        # Overwrite params from arguments given
-        if args['first_idx'] is not None and args['last_idx'] is not None:
-            params['adv_attack_test']['test_start_idx'] = args['first_idx']
-            params['adv_attack_test']['test_end_idx'] = args['last_idx']
-        if args['test_eps'] is not None:
-            params['adv_attack_test']['epsilon'] = args['test_eps']
-        if args['test_step_size'] is not None:
-            params['adv_attack_test']['pgd_step'] = args['test_step_size']
-        if args['test_pgd_iter'] is not None:
-            params['adv_attack_test']['pgd_iter'] = args['test_pgd_iter']
-        if args['beta'] is not None:
-            params['adv_attack_test']['beta'] = args['beta']
-
-        if args['lambda'] is not None:
-            params['fit_to_sample']['epsilon'] = args['lambda']
-        if args['fix_pgd_iter'] is not None:
-            params['fit_to_sample']['pgd_iter'] = args['fix_pgd_iter']
-            params['fit_to_sample']['pgd_step'] = params['fit_to_sample']['epsilon'] / args['fix_pgd_iter']
-        if args['fix_pgd_restart_num'] is not None:
-            params['fit_to_sample']['pgd_rand_start'] = True if args['fix_pgd_restart_num'] != 0 else False
-            params['fit_to_sample']['pgd_test_restart_num'] = args['fix_pgd_restart_num'] if params['fit_to_sample']['pgd_rand_start'] else 1
-
         return params
+
+    def __update_params_from_cli(self, cli_params):
+        for key, inner_dict in cli_params.items():
+            for inner_key, val in inner_dict.items():
+                if val is not None:
+                    self.params[key][inner_key] = val
 
     def get_params(self):
         return self.params
@@ -74,7 +59,7 @@ class Experiment:
         else:
             model.eval()
             attack = get_attack(p['attack_type'], model, p['epsilon'], p['pgd_iter'], p['pgd_step'],
-                                p['pgd_rand_start'], get_dataset_min_max_val(self.exp_type), p['pgd_test_restart_num'],
+                                get_dataset_min_max_val(self.exp_type), p['pgd_test_restart_num'],
                                 beta=p['beta'])
         return self.get_dataloaders(datafolder, attack)
 
@@ -199,5 +184,5 @@ class Experiment:
 
     def get_attack_for_model(self, model):
         p = self.params["adv_attack_test"]
-        return get_attack(p['attack_type'], model, p['epsilon'], p['pgd_iter'], p['pgd_step'], p['pgd_rand_start'],
+        return get_attack(p['attack_type'], model, p['epsilon'], p['pgd_iter'], p['pgd_step'],
                           get_dataset_min_max_val(self.exp_type), p['pgd_test_restart_num'], beta=p['beta'])

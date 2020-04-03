@@ -2,8 +2,7 @@ import copy
 import json
 import os
 import time
-
-import argparse
+import jsonargparse
 import torch
 torch.manual_seed(1)
 import numpy as np
@@ -70,7 +69,7 @@ def run_experiment(experiment_h):
                                  logger,
                                  params_init_training["adv_alpha"], params_init_training["epsilon"],
                                  params_init_training["attack_type"], params_init_training["pgd_iter"],
-                                 params_init_training["pgd_step"], params_init_training["pgd_rand_start"],
+                                 params_init_training["pgd_step"], params_init_training["pgd_test_restart_num"],
                                  params_init_training["save_model_every_n_epoch"])
         train_class.eval_test_during_train = True if params_init_training['eval_test_every_n_epoch'] is not None else False
         train_class.freeze_batch_norm = False
@@ -117,7 +116,7 @@ def run_experiment(experiment_h):
                                  logger,
                                  params_init_training["adv_alpha"], params_init_training["epsilon"],
                                  params_init_training["attack_type"], params_init_training["pgd_iter"],
-                                 params_init_training["pgd_step"], params_init_training["pgd_rand_start"])
+                                 params_init_training["pgd_step"], params_init_training["pgd_test_restart_num"])
         logger.info('Train ERM model')
         train_class.eval_test_during_train = True
         model_erm, train_loss, test_loss = train_class.train_model(model_erm, dataloaders,
@@ -175,27 +174,31 @@ def run_experiment(experiment_h):
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Applications of Deep PNML')
-    parser.add_argument('-t', '--experiment_type', default='mnist_adversarial',
+    parser = jsonargparse.ArgumentParser(description='General arguments', default_meta=False)
+    parser.add_argument('-t', '--general.experiment_type', default='mnist_adversarial',
                         help='Type of experiment to execute', type=str)
-    parser.add_argument('-f', '--first_idx', default=None, help='first test idx', type=int)
-    parser.add_argument('-l', '--last_idx', default=None, help='last test idx', type=int)
-    parser.add_argument('-p', '--param_file_path', default=os.path.join('src', 'params.json'),
+    parser.add_argument('-p', '--general.param_file_path', default=os.path.join('./src/parameters', 'eval_imagenet_param.json'),
                         help='param file path used to load the parameters file containing default values to all '
                              'parameters', type=str)
-    parser.add_argument('-e', '--test_eps', default=None, help='the epsilon strength of the attack', type=float)
-    parser.add_argument('-ts', '--test_step_size', default=None, help='the step size of the attack', type=float)
-    parser.add_argument('-ti', '--test_pgd_iter', default=None, help='the number of test pgd iterations', type=int)
-    parser.add_argument('-r', '--lambda', default=None, help='the epsilon strength of the refinement (lambda)', type=float)
-    parser.add_argument('-b', '--beta', default=None, help='the beta value for regret reduction regularization ', type=float)
-    parser.add_argument('-i', '--fix_pgd_iter', default=None, help='the number of PGD iterations of the refinement', type=int)
-    parser.add_argument('-n', '--fix_pgd_restart_num', default=None, help='the number of PGD restarts where 0 means no random start',
+    parser.add_argument('-o', '--general.output_root', default='output', help='the output directory where results will be saved', type=str)
+
+    parser.add_argument('-f', '--adv_attack_test.test_start_idx', help='first test idx', type=int)
+    parser.add_argument('-l', '--adv_attack_test.test_end_idx', help='last test idx', type=int)
+    parser.add_argument('-e', '--adv_attack_test.epsilon', help='the epsilon strength of the attack', type=float)
+    parser.add_argument('-ts', '--adv_attack_test.pgd_step', help='the step size of the attack', type=float)
+    parser.add_argument('-ti', '--adv_attack_test.pgd_iter', help='the number of test pgd iterations', type=int)
+    parser.add_argument('-b', '--adv_attack_test.beta', help='the beta value for regret reduction regularization ',
+                               type=float)
+    parser.add_argument('-r', '--fit_to_sample.epsilon', help='the epsilon strength of the refinement (lambda)', type=float)
+    parser.add_argument('-i', '--fit_to_sample.pgd_iter', help='the number of PGD iterations of the refinement', type=int)
+    parser.add_argument('-s', '--fit_to_sample.pgd_step', help='the step size of the refinement', type=float)
+    parser.add_argument('-n', '--fit_to_sample.pgd_test_restart_num', help='the number of PGD restarts where 0 means no random start',
                         type=int)
-    parser.add_argument('-o', '--output_root', default='output', help='the output directory where results will be saved', type=str)
 
-    args = vars(parser.parse_args())
+    args = jsonargparse.namespace_to_dict(parser.parse_args())
+    general_args = args.pop('general')
 
-    experiment_h = Experiment(args)
+    experiment_h = Experiment(general_args, args)
 
     run_experiment(experiment_h)
 
