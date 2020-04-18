@@ -14,7 +14,6 @@
             "epsilon": 0.0156862745098,
             "pgd_iter": 50,
             "pgd_step": 0.00392156862,
-            "pgd_rand_start": true,
             "pgd_test_restart_num": 10,
             "beta": 0.0,
             "test_start_idx": 0,
@@ -51,7 +50,6 @@
             "epsilon": 0.39,
             "pgd_iter": 40,
             "pgd_step": 0.01,
-            "pgd_rand_start": true,
             "pgd_test_restart_num": 3,
             "beta": 0.0,
             "test_start_idx": 0,
@@ -61,7 +59,7 @@
         "_comment": "===== MNIST MODEL =====",
         "model_arch": "MNISTClassifier",
         "ckpt_path": "./trained_models/mnist_classifier/bpda_ep6_eps0.3_restant20_uniformRnd/model_iter_6.pt",
-        "pnml_active": false
+        "pnml_active": true
         },
         "fit_to_sample": {
             "_comment": "===== MNIST PNML=====",

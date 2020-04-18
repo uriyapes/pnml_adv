@@ -660,7 +660,10 @@ def load_results_to_df_with_params(dir, idx=None, eps_type:str = 'fix', flag_ret
         params['adv_attack_test']['epsilon']
 
     statistics_df.loc['nml', 'refine_iter'] = params['fit_to_sample']['pgd_iter']
-    statistics_df.loc['nml', 'refine_random_start'] = params['fit_to_sample']['pgd_rand_start']
+    try:
+        statistics_df.loc['nml', 'refine_random_start'] = params['fit_to_sample']['pgd_rand_start']  # Backward comptability
+    except:
+        pass
     statistics_df.loc['nml', 'refine_restart_num'] = params['fit_to_sample']['pgd_test_restart_num']
     statistics_df.loc['nml', 'beta'] = params['adv_attack_test']['beta'] if params['adv_attack_test'].keys().__contains__('beta') else 0
 

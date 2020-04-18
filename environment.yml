@@ -1,4 +1,4 @@
-name: pnml_adv
+name: pnml_adv2
 channels:
   - pytorch
   - conda-forge
@@ -11,5 +11,7 @@ dependencies:
   - pandas
   - scipy
   - matplotlib
+  - notebook
+  - pip
   - pip:
     - jsonargparse

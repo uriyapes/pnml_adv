@@ -1,5 +1,5 @@
 import json
-
+from typing import Union
 from dataset_utilities import create_mnist_train_dataloader, create_adv_mnist_test_dataloader_preprocessed
 from dataset_utilities import create_imagenet_test_loader
 from dataset_utilities import create_adversarial_cifar10_dataloaders
@@ -14,7 +14,13 @@ from dataset_utilities import get_dataset_min_max_val
 
 
 class Experiment:
-    def __init__(self, args, cli_params):
+    def __init__(self, args: dict, cli_params: Union[dict, None] = None):
+        """
+
+        :param args: General arguments detailing the experiment such as: output_root, path to parameters.json (param_file_path)
+                    and experiment_type
+        :param cli_params:
+        """
         if args['experiment_type'] not in [
                             'out_of_dist_svhn',
                             'out_of_dist_noise',
@@ -25,21 +31,32 @@ class Experiment:
             raise NameError('No experiment type: %s' % type)
         self.exp_type = args['experiment_type']
         self.params = self.__load_params_from_file(args, self.exp_type)
+        if self.exp_type != "imagenet_adversarial":
+            self.params["num_classes"] = 10
+        if cli_params is None:
+            cli_params = dict()
         self.__update_params_from_cli(cli_params)
         self.output_dir = args['output_root']
 
     @staticmethod
     def __load_params_from_file(args, exp_type):
+        """
+        Load parameters for exp_type
+        :param args: a dict containing a path to parameters file containing parameters for different experiments
+        :param exp_type:
+        :return:
+        """
         param_file_path = args['param_file_path']
         with open(param_file_path) as f:         # Load the params for all experiments from param_file_path
             params = json.load(f)
-        params = params[exp_type]
+        assert(exp_type == params['exp_type'])
         return params
 
     def __update_params_from_cli(self, cli_params):
         for key, inner_dict in cli_params.items():
             for inner_key, val in inner_dict.items():
                 if val is not None:
+                    print("Update: params[{}][{}] = {}".format(key, inner_key, val))
                     self.params[key][inner_key] = val
 
     def get_params(self):

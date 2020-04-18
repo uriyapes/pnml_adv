@@ -50,6 +50,13 @@ class Adversarials(object):
     def dump(self, path_to_folder):
         torch.save(self, os.path.join(path_to_folder, "adversarials.t"))
 
+    def get_mean_loss(self):
+        return self.loss.sum() / len(self.loss)
+
+    def get_accuracy(self):
+        return self.correct.sum().item() / len(self.correct)
+
+
 
 class Attack(ABC):
     """Base class for adversarial attack methods"""

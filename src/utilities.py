@@ -3,6 +3,8 @@ import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+import os
+import random
 
 
 # print(os.getcwd()) #print working dir
@@ -18,6 +20,7 @@ def plt_adv_mnist_img(testloader = None):
             plt.imshow(img, cmap='gray')
             plt.show()
         break
+
 
 def plt_img(image_batch, index_list=[0], is_save_fig=False):
     """
@@ -43,8 +46,11 @@ def plt_img(image_batch, index_list=[0], is_save_fig=False):
         # plt.show()
     plt.savefig('./adv_output_images.jpg', bbox_inches=plt.tight_layout()) if is_save_fig else None
 
+
 class TorchUtils(ABC):
     __device__ = None
+    __seed__ = None
+
     @classmethod
     @abstractmethod
     def to_device(cls, tensor: torch.tensor):
@@ -78,3 +84,20 @@ class TorchUtils(ABC):
         device = "cuda" if torch.cuda.is_available() else "cpu"
         print("Setting device for pytorch: " + device)
         cls.set_device(device)
+
+    @classmethod
+    @abstractmethod
+    def set_rnd_seed(cls, seed: int):
+        # Important note: When using multiple workers dataloader(num_workers > 1) you need to create DataLoader with
+        # worker_init_fn=set_rnd_seed(<your_seed>)
+        assert(type(seed) == int)
+        cls.__seed__ = seed
+        random.seed(seed)
+        os.environ['PYTHONHASHSEED'] = str(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)  # if you are using multi-GPU.
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = True
+

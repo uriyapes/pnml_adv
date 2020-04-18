@@ -51,8 +51,8 @@ class PnmlModel(ModelTemplate):
         self.gamma = params['epsilon']
         self.clamp = clamp
         self.base_model = base_model
-        self.refine = get_attack("fgsm", self.base_model, self.gamma, params["pgd_iter"], params["pgd_step"], False,
-                                 self.clamp, 1)
+        self.refine = get_attack("fgsm", self.base_model, self.gamma, params["pgd_iter"], params["pgd_step"],
+                                 self.clamp, 0)
         # self.refine = get_attack("pgd", self.base_model, self.gamma, params["pgd_iter"], params["pgd_step"], False,
         #                          self.clamp, 1)
         self.loss_fn = torch.nn.CrossEntropyLoss(reduction='sum')  # reduction='none' The loss is config with reduction='none' so the grad of each sample won't be effected by other samples

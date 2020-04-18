@@ -1,16 +1,11 @@
 import jsonargparse
 import os
-
 import torch
-torch.manual_seed(1)
-import numpy as np
-# torch.backends.cudnn.deterministic = True
-torch.backends.cudnn.benchmark = True
-np.random.seed(0)
 
 import logger_utilities
 from experimnet_utilities import Experiment
 from utilities import TorchUtils
+TorchUtils.set_rnd_seed(1)
 from train_utilities import TrainClass
 import json
 
@@ -48,10 +43,6 @@ def eval_adversarial_dataset(model, dataloader, attack):
         # correct += (predicted == labels).sum().item()
         # if (predicted == labels).sum().item() == 1:
         #     print("correct prediction in iter_num: {}".format(iter_num))
-    loss = adversarials.loss.sum() / len(dataloader.dataset)
-    acc = adversarials.correct.sum().item() / len(dataloader.dataset)
-    logger.info("Accuracy: {}, Loss: {}".format(acc, loss))
-    adversarials.dump(logger.output_folder)
     return adversarials
 
 
@@ -64,11 +55,11 @@ def eval_black_box(model_to_eval, model_to_attack, dataloader, attack):
     pass
 
 
-if __name__ == "__main__":
+def main():
     parser = jsonargparse.ArgumentParser(description='General arguments', default_meta=False)
     parser.add_argument('-t', '--general.experiment_type', default='mnist_adversarial',
                         help='Type of experiment to execute', type=str)
-    parser.add_argument('-p', '--general.param_file_path', default=os.path.join('./src/parameters', 'eval_imagenet_param.json'),
+    parser.add_argument('-p', '--general.param_file_path', default=os.path.join('./src/parameters', 'eval_mnist_params.json'),
                         help='param file path used to load the parameters file containing default values to all '
                              'parameters', type=str)
     parser.add_argument('-o', '--general.output_root', default='output', help='the output directory where results will be saved', type=str)
@@ -90,7 +81,7 @@ if __name__ == "__main__":
     general_args = args.pop('general')
 
     exp = Experiment(general_args, args)
-    logger_utilities.init_logger(experiment_type=exp.get_exp_name(), output_root=exp.output_dir)
+    logger_utilities.init_logger(logger_name=exp.get_exp_name(), output_root=exp.output_dir)
 
     # Get models:
     model_to_eval = exp.get_model(exp.params['model']['model_arch'], exp.params['model']['ckpt_path'],
@@ -112,5 +103,13 @@ if __name__ == "__main__":
     logger.info(exp.params)
 
     adv = eval_adversarial_dataset(model_to_eval, dataloaders['test'], attack)
+    loss = adv.get_mean_loss()
+    acc = adv.get_accuracy()
+    logger.info("Accuracy: {}, Loss: {}".format(acc, loss))
+    adv.dump(logger.output_folder)
+    return adv
 
+
+if __name__ == "__main__":
+    adv = main()
     print('Finish evaluation')

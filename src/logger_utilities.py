@@ -9,9 +9,9 @@ import pathlib
 logger_l = []
 
 
-def init_logger(experiment_type: str, output_root: str):
+def init_logger(logger_name: str, output_root: str):
     assert len(logger_l) == 0
-    logger_l.append(Logger(experiment_type, output_root))
+    logger_l.append(Logger(logger_name, output_root))
 
 
 def get_logger():
@@ -19,11 +19,16 @@ def get_logger():
     return logger_l[0]
 
 
+def delete_logger():
+    logger = logger_l.pop()
+    del logger
+
+
 class Logger:
-    def __init__(self, experiment_type: str, output_root: str):
+    def __init__(self, logger_name: str, output_root: str):
         """
         Initialize logger class
-        :param experiment_type: the experiment type- use for saving string of the outputs/
+        :param logger_name: the experiment type- use for saving string of the outputs/
         :param output_root: the directory to which the output will be saved.
         """
 
@@ -43,12 +48,12 @@ class Logger:
 
         self.unique_time = time.strftime("%Y%m%d_%H%M%S")
         self.output_folder = os.path.join(output_root, '%s_results_%s' %
-                                          (experiment_type, self.unique_time))
+                                          (logger_name, self.unique_time))
         pathlib.Path(self.output_folder).mkdir(parents=True, exist_ok=True)
         self.define_log_file(os.path.join(self.output_folder, 'log_%s_%s.log' %
-                                          (experiment_type, self.unique_time)))
+                                          (logger_name, self.unique_time)))
         self.define_json_output(os.path.join(self.output_folder, 'results_%s_%s.json' %
-                                             (experiment_type, self.unique_time)))
+                                             (logger_name, self.unique_time)))
         self.time = None
 
     def define_log_file(self, log_file_name: str):
@@ -143,6 +148,9 @@ class Logger:
         pickle.dump(obj, open(file_path, "wb"))
 
     @classmethod
-    def load_pickle(cls, path):
-        file_path = os.path.join(path, 'adversarials.p')
-        return pickle.load(open(file_path, "rb"))
+    def load_pickle(cls, file_name):
+        return pickle.load(open(file_name, "rb"))
+
+    def __del__(self):
+        for handler in self.logger.handlers[:]:
+            self.logger.removeHandler(handler)

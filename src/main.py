@@ -171,8 +171,6 @@ def run_experiment(experiment_h):
     logger.info('Finish All!')
 
 
-
-
 if __name__ == "__main__":
     parser = jsonargparse.ArgumentParser(description='General arguments', default_meta=False)
     parser.add_argument('-t', '--general.experiment_type', default='mnist_adversarial',
