@@ -137,40 +137,40 @@ class PGD(Attack):
     def __init__(self,
                  model: Module,
                  loss_fn: Callable,
-                 eps_ratio: float,
-                 k: int,
-                 step: float,
-                 random: bool,
+                 attack_params: dict,
                  clamp: Tuple[float, float] = (0, 1),
                  norm: Union[str, int] = 'inf',
-                 restart_num: int = 1,
-                 beta=0.0075,
                  flip_grad_ratio=0.0):
         super(PGD, self).__init__()
         self.name = self.__class__.__name__
         self.model = model
-        self.loss_fn = loss_fn
-        self.eps_ratio = eps_ratio
-        self.k = k
-        self.norm = norm
-        self.random = random
-        self.clamp = clamp
-        self.step = step * (self.clamp[1] - self.clamp[0])
-        self.eps = self.eps_ratio * (self.clamp[1] - self.clamp[0])
-        self.restart_num = restart_num
-        self.beta = beta
-        self.flip_grad_ratio = flip_grad_ratio
+        self.loss_fn = loss_fn  # TODO: not used currently
+        self.attack_params = attack_params.copy()
+        if attack_params["pgd_test_restart_num"] == 0:
+            self.attack_params["random"] = False
+            self.attack_params["pgd_test_restart_num"] = 1
+        else:
+            self.attack_params["random"] = True
+        self.attack_params["epsilon"] = self.attack_params["epsilon"] * (clamp[1] - clamp[0])
+        self.attack_params["pgd_step"] = self.attack_params["pgd_step"] * (clamp[1] - clamp[0])
+
+        self.attack_params["norm"] = norm
+        self.attack_params["clamp"] = clamp
+
+        self.attack_params["flip_grad_ratio"] = flip_grad_ratio
 
     def create_adversarial_sample(self,
                                   x: torch.Tensor,
                                   y: torch.Tensor,
                                   y_target: torch.Tensor = None,
                                   get_adversarial_class: bool = False) -> Union[torch.Tensor, Adversarials]:
-        adv_sample, adv_loss, adv_pred, genie_pred = iterated_fgsm(self.model, x, y, self.loss_fn, self.k, self.step, self.eps,
-                                                       self.norm, y_target=y_target, random=self.random, clamp=self.clamp,
-                                                       restart_num=self.restart_num, beta=self.beta, flip_grad_ratio=self.flip_grad_ratio)
+        adv_sample, adv_loss, adv_pred, genie_pred = iterated_fgsm(
+                self.model, x, y, self.loss_fn, self.attack_params["pgd_iter"],self.attack_params["pgd_step"],
+                self.attack_params["epsilon"], self.attack_params["norm"], y_target=y_target, random=self.attack_params["random"],
+                clamp=self.attack_params["clamp"], restart_num=self.attack_params["pgd_test_restart_num"],
+                beta=self.attack_params["beta"], flip_grad_ratio=self.attack_params["flip_grad_ratio"])
         if get_adversarial_class:
-            adversarials = Adversarials(self.__dict__, x, y, adv_pred, adv_loss, adv_sample, genie_pred)
+            adversarials = Adversarials(self.attack_params, x, y, adv_pred, adv_loss, adv_sample, genie_pred)
             return adversarials
         else:
             return adv_sample
@@ -206,24 +206,32 @@ class Boundary(Attack):
         return boundary(model, x, y, self.orthogonal_step, self.perpendicular_step, self.k, initial, clamp)
 
 
-def get_attack(attack_type: str, model: Module = None, eps: float = 0.3, iter: int = 30, step_size: float = 0.01,
-               clamp: Tuple[float, float] = (0, 1), restart_num: int = 1, loss_fn: Callable = torch.nn.CrossEntropyLoss,
-               beta=0.0, flip_grad_ratio=0.0):
-    if restart_num == 0:
-        random = False
-        restart_num = 1
-    else:
-        random = True
-    if attack_type == 'no_attack':
+def get_attack(attack_params: dict, model: Module = None, clamp: Tuple[float, float] = (0, 1),
+               loss_fn: Callable = torch.nn.CrossEntropyLoss, flip_grad_ratio=0.0):
+    """
+    :param attack_params: a dictionary containing attack parameters. Dictionary keys:
+        attack_type
+        epsilon
+        pgd_iter
+        pgd_step
+        pgd_test_restart_num
+        beta
+    :param model: The model to be attacked
+    :param clamp: The value range of the samples
+    :param  loss_fn:
+    :param flip_grad_ratio:
+    """
+    if attack_params["attack_type"] == 'no_attack':
         attack = NoAttack()
-    elif attack_type == "natural":
+    elif attack_params["attack_type"] == "natural":
         attack = Natural(model)
-    elif attack_type == 'fgsm':
-        attack = FGSM(model, loss_fn, eps, clamp)
-    elif attack_type == 'pgd':
-        attack = PGD(model, loss_fn, eps, iter, step_size, random, clamp, 'inf', restart_num, beta, flip_grad_ratio)
+    elif attack_params["attack_type"] == 'fgsm':
+        attack = FGSM(model, loss_fn, attack_params["epsilon"], clamp)
+    elif attack_params["attack_type"] == 'pgd':
+        # attack = PGD(model, loss_fn, eps, iter, step_size, random, clamp, 'inf', restart_num, beta, flip_grad_ratio)
+        attack = PGD(model, loss_fn, attack_params, clamp, 'inf', flip_grad_ratio)
     else:
-        raise NameError('No attack named %s' % attack_type)
+        raise NameError('No attack named %s' % attack_params["attack_type"])
 
     return attack
 

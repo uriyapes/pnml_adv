@@ -221,7 +221,7 @@ class TrainClass:
         return outputs, loss
 
     @classmethod
-    def eval_model(cls, model, dataloader, attack = get_attack("no_attack"), loss_func='default'):
+    def eval_model(cls, model, dataloader, attack = get_attack({"attack_type":"no_attack"}), loss_func='default'):
         """
         Evaluate the performance of the model on the train/test sets.
         :param model: the model that will be evaluated.

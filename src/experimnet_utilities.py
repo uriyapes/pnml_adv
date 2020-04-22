@@ -95,12 +95,10 @@ class Experiment:
         if p is None:
             p = {'attack_type': "no_attack"}
         if model is None or p['attack_type'] == "no_attack":
-            attack = get_attack("no_attack")
+            attack = get_attack(p)
         else:
             model.eval()
-            attack = get_attack(p['attack_type'], model, p['epsilon'], p['pgd_iter'], p['pgd_step'],
-                                get_dataset_min_max_val(self.exp_type), p['pgd_test_restart_num'],
-                                beta=p['beta'])
+            attack = get_attack(p, model, get_dataset_min_max_val(self.exp_type))
         return self._create_dataloaders(datafolder, attack)
 
     def _create_dataloaders(self, data_folder: str = './data', attack=None):
@@ -223,6 +221,4 @@ class Experiment:
         return name
 
     def get_attack_for_model(self, model):
-        p = self.params["adv_attack_test"]
-        return get_attack(p['attack_type'], model, p['epsilon'], p['pgd_iter'], p['pgd_step'],
-                          get_dataset_min_max_val(self.exp_type), p['pgd_test_restart_num'], beta=p['beta'])
+        return get_attack(self.params["adv_attack_test"], model, get_dataset_min_max_val(self.exp_type))
