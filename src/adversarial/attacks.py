@@ -1,14 +1,14 @@
 # Code is based on https://github.com/oscarknagg/adversarial
-from typing import Union
 from abc import ABC, abstractmethod
 from adversarial.functional import *
 import torch
 import os
+from typing import Union
 
 
 class Adversarials(object):
-    def __init__(self, attack_params: dict, original_sample: torch.Tensor, true_label: torch.Tensor, probability: torch.Tensor, loss: torch.Tensor,
-                  adversarial_sample=None, genie_prob=None):
+    def __init__(self, attack_params: dict, original_sample: Union[torch.Tensor, None], true_label: torch.Tensor, probability: torch.Tensor, loss: torch.Tensor,
+                  adversarial_sample: Union[torch.Tensor, None] = None, genie_prob: Union[torch.Tensor, None] = None):
         """
 
         :param original_sample: The original data (non adversarial)
@@ -21,22 +21,22 @@ class Adversarials(object):
         """
         self.attack_params = attack_params
         # TODO: pre-allocate memory in advance using dataset shape
-        self.original_sample = original_sample.cpu()
-        self.true_label = true_label.cpu()
-        self.adversarial_sample = adversarial_sample.cpu() if adversarial_sample is not None else None
-        self.probability = probability.cpu()
-        self.predict = torch.max(probability, 1)[1].cpu()
+        self.original_sample = original_sample.detach().cpu() if original_sample is not None else None
+        self.true_label = true_label.detach().cpu()
+        self.adversarial_sample = adversarial_sample.detach().cpu() if adversarial_sample is not None else None
+        self.probability = probability.detach().cpu()
+        self.predict = torch.max(self.probability, 1)[1]
         self.correct = (self.predict == self.true_label)
-        self.loss = loss.cpu()
+        self.loss = loss.detach().cpu()
         if genie_prob is not None:
-            self.genie_prob = genie_prob.cpu()
+            self.genie_prob = genie_prob.detach().cpu()
             self.regret = torch.log(self.genie_prob.sum(dim=1, keepdim=False))
         else:
             self.genie_prob = None
             self.regret = None
 
     def merge(self, adv):
-        self.original_sample = torch.cat([self.original_sample, adv.original_sample], dim=0)
+        self.original_sample = torch.cat([self.original_sample, adv.original_sample], dim=0) if adv.original_sample is not None else None
         self.true_label = torch.cat([self.true_label, adv.true_label])
         self.adversarial_sample = torch.cat([self.adversarial_sample, adv.adversarial_sample]) if adv.adversarial_sample is not None else None
         self.probability = torch.cat([self.probability, adv.probability])
@@ -57,7 +57,6 @@ class Adversarials(object):
         return self.correct.sum().item() / len(self.correct)
 
 
-
 class Attack(ABC):
     """Base class for adversarial attack methods"""
     @abstractmethod
@@ -72,6 +71,21 @@ class NoAttack(Attack):
 
     def create_adversarial_sample(self, x: torch.Tensor, y: torch.Tensor,  y_target: torch.Tensor = None):
         return x
+
+
+class Natural(Attack):
+    def __init__(self, model):
+        super(Natural, self).__init__()
+        self.name = self.__class__.__name__
+        self.model = model
+
+    def create_adversarial_sample(self, x: torch.Tensor, y: torch.Tensor, y_target: torch.Tensor = None,
+                                  get_adversarial_class: bool = False):
+        loss, prob, genie_prob = self.model.eval_batch(x, y, self.model.pnml_model)
+        if get_adversarial_class:
+            return Adversarials(None, None, y, prob, loss, x, genie_prob)
+        else:
+            return x
 
 
 class FGSM(Attack):
@@ -202,6 +216,8 @@ def get_attack(attack_type: str, model: Module = None, eps: float = 0.3, iter: i
         random = True
     if attack_type == 'no_attack':
         attack = NoAttack()
+    elif attack_type == "natural":
+        attack = Natural(model)
     elif attack_type == 'fgsm':
         attack = FGSM(model, loss_fn, eps, clamp)
     elif attack_type == 'pgd':

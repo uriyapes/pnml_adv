@@ -150,20 +150,20 @@ def _iterative_gradient(model: Module,
     x_adv = x_adv.detach()
     # x_adv.requires_grad_(True) #  This is done so model with refinement could do backprop
 
-    # TODO: next section could be with torch.no_grad if not pnml model
-    logits_or_prob = model(x_adv).detach()  # could be logits or probability
-    if model.pnml_model:
-        prediction = logits_or_prob.detach()
-        log_prob = torch.log(logits_or_prob).detach()
-        genie_prob = model.get_genie_prob().detach()
-    else:  # if Logits:
-        prediction = torch.softmax(logits_or_prob, 1).detach()
-        log_prob = torch.log_softmax(logits_or_prob, 1).detach()
-        genie_prob = None
-    adv_loss = loss_fn(log_prob, y_target if targeted else y).detach()
-    x_adv.requires_grad_ = False
+    loss, prob, genie_prob = model.eval_batch(x_adv, y_target if targeted else y, enable_grad=model.pnml_model)
+    # logits_or_prob = model(x_adv).detach()  # could be logits or probability
+    # if model.pnml_model:
+    #     prediction = logits_or_prob.detach()
+    #     log_prob = torch.log(logits_or_prob).detach()
+    #     genie_prob = model.get_genie_prob().detach()
+    # else:  # if Logits:
+    #     prediction = torch.softmax(logits_or_prob, 1).detach()
+    #     log_prob = torch.log_softmax(logits_or_prob, 1).detach()
+    #     genie_prob = None
+    # adv_loss = loss_fn(log_prob, y_target if targeted else y).detach()
+    # x_adv.requires_grad_ = False
 
-    return x_adv, adv_loss, prediction, genie_prob
+    return x_adv, loss.detach(), prob.detach(), genie_prob
 
 
 def iterated_fgsm(model: Module,

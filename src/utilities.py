@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 import matplotlib
 import matplotlib.pyplot as plt
+from typing import Callable
 import numpy as np
 import torch
 import os
@@ -100,4 +101,3 @@ class TorchUtils(ABC):
         torch.cuda.manual_seed_all(seed)  # if you are using multi-GPU.
         torch.backends.cudnn.benchmark = False
         torch.backends.cudnn.deterministic = True
-

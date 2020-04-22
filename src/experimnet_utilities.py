@@ -1,9 +1,11 @@
+import torch
 import json
 from typing import Union
 from dataset_utilities import create_mnist_train_dataloader, create_adv_mnist_test_dataloader_preprocessed
 from dataset_utilities import create_imagenet_test_loader
 from dataset_utilities import create_adversarial_cifar10_dataloaders
 from dataset_utilities import create_mnist_dataloaders
+from dataset_utilities import create_tensor_dataloader
 # from dataset_utilities import create_svhn_dataloaders
 from models.mpl import Net, Net_800_400_100, MNISTClassifier, PnmlModel
 from models.wide_resnet_original import WideResNet
@@ -62,6 +64,27 @@ class Experiment:
     def get_params(self):
         return self.params
 
+    def get_dataloaders(self) -> dict:
+        """
+        :return: Non adversarial dataloaders
+        """
+        if self.params['adv_attack_test']["white_box"]:
+            return self.get_adv_dataloaders(datafolder='./data', p=None, model=None)
+        else:
+            return self.get_blackbox_dataloader()
+
+    def get_blackbox_dataloader(self):
+        p = self.params['adv_attack_test']
+        assert(p["white_box"] is False)
+        adv = torch.load(p["black_box_adv_path"])
+        dataloader = dict()
+        dataloader['test'], dataloader['classes'] = create_tensor_dataloader(adv.adversarial_sample, adv.true_label,
+                                                             batch_size=self.params["batch_size"], num_workers=self.params["num_workers"],
+                                                             start_idx=p["test_start_idx"], end_idx=p["test_end_idx"])
+        dataloader['dataset_name'] = self.exp_type
+        dataloader["black_box_attack_params"] = adv.attack_params
+        return dataloader
+
     def get_adv_dataloaders(self, datafolder: str = './data', p=None, model=None):
         """
         :param datafolder: location of the data
@@ -78,9 +101,9 @@ class Experiment:
             attack = get_attack(p['attack_type'], model, p['epsilon'], p['pgd_iter'], p['pgd_step'],
                                 get_dataset_min_max_val(self.exp_type), p['pgd_test_restart_num'],
                                 beta=p['beta'])
-        return self.get_dataloaders(datafolder, attack)
+        return self._create_dataloaders(datafolder, attack)
 
-    def get_dataloaders(self, data_folder: str = './data', attack=None):
+    def _create_dataloaders(self, data_folder: str = './data', attack=None):
         if self.exp_type == 'pnml_mnist':
             trainloader, testloader, classes, bounds = create_mnist_dataloaders(data_folder,
                                                                         self.params['batch_size'],

@@ -82,7 +82,7 @@ class PnmlModel(ModelTemplate):
         return self.forward_base_model(x_genie, no_grad_flag=False) #.detach()
 
     def get_genie_prob(self):
-        return self.genie_prob.clone()
+        return self.genie_prob.detach().clone()
 
     def calc_log_prob(self, x):
         return torch.log(self.__call__(x))

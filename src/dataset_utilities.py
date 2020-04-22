@@ -191,6 +191,20 @@ def generate_noise_sample():
     return random_sample_data, random_sample_label
 
 
+def create_tensor_dataloader(input: torch.Tensor, labels: torch.Tensor, batch_size: int = 128, num_workers: int = 4,
+                             start_idx: int = 0, end_idx: int = 49, labels_to_test: int = 10):
+    testset = data.TensorDataset(input, labels)
+    indices = [i for i in range(start_idx, end_idx+1)]
+    testset = data.Subset(testset, indices=indices)
+    testloader = data.DataLoader(testset,
+                                 batch_size=batch_size,
+                                 shuffle=False,
+                                 num_workers=num_workers,
+                                 pin_memory=True)
+    classes = [str(i) for i in range(labels_to_test)]
+    return testloader, classes
+
+
 def create_imagenet_test_loader(data_dir: str = './data', batch_size: int = 128, num_workers: int = 4, start_idx=0, end_idx=49, labels_to_test=1000):
     # normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
     #                                  std=[0.229, 0.224, 0.225])

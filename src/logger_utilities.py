@@ -21,6 +21,7 @@ def get_logger():
 
 def delete_logger():
     logger = logger_l.pop()
+    logger.cleanup()
     del logger
 
 
@@ -31,7 +32,6 @@ class Logger:
         :param logger_name: the experiment type- use for saving string of the outputs/
         :param output_root: the directory to which the output will be saved.
         """
-
         # Create logger
         logger = logging.getLogger("utilities_logger")
         logger.setLevel(logging.INFO)
@@ -151,6 +151,7 @@ class Logger:
     def load_pickle(cls, file_name):
         return pickle.load(open(file_name, "rb"))
 
-    def __del__(self):
+    def cleanup(self):
+        # logging.shutdown()
         for handler in self.logger.handlers[:]:
             self.logger.removeHandler(handler)

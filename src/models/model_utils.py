@@ -27,6 +27,29 @@ class ModelTemplate(nn.Module, ABC):
     def get_genie_prob(self):
         return None
 
+    def eval_batch(self, data, labels, enable_grad: bool = True):
+        """
+        :param data: the data to evaluate
+        :param labels: the labels of the data
+        :param enable_grad: Should grad be enabled for later differentiation
+        :param model_output_type: "logits" if model output logits or "prob"
+        :param loss_func: The loss function used to calculate the loss
+        :return: batch loss, probability and label prediction.
+        """
+        loss_func = torch.nn.NLLLoss(reduction='none')
+        self.eval()
+        with torch.set_grad_enabled(enable_grad):
+            data, labels = TorchUtils.to_device(data), TorchUtils.to_device(labels)
+            output = self.__call__(data)
+            if not self.pnml_model:  # Output is logits
+                prob = torch.softmax(output, 1)
+                loss = loss_func(torch.log_softmax(output, 1), labels)  # log soft-max is more numerically stable
+            else:  # Output is probability
+                prob = output
+                loss = loss_func(torch.log(output), labels)
+            # _, predicted_label = torch.max(output.data, 1)
+        return loss, prob, self.get_genie_prob()
+
 
 def load_pretrained_model(model_base, model_params_path):
     device = TorchUtils.get_device()

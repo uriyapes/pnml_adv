@@ -10,8 +10,6 @@ from train_utilities import TrainClass
 import json
 
 
-def eval_batch(model, data, labels):
-    pass
 
 
 def eval_adversarial_dataset(model, dataloader, attack):
@@ -86,13 +84,8 @@ def main():
     # Get models:
     model_to_eval = exp.get_model(exp.params['model']['model_arch'], exp.params['model']['ckpt_path'],
                                   exp.params['model']['pnml_active'])
-    if exp.params['adv_attack_test']['white_box'] is False:
-        blackbox_model = exp.get_model(exp.params['adv_attack_test']['black_box_model_arch'],
-                                       exp.params['adv_attack_test']['black_box_model_path'], exp.params['adv_attack_test']['black_box_pnml_active'])
 
-    # Get Dataloaders
-    data_folder = "./data"
-    dataloaders = exp.get_adv_dataloaders(data_folder)
+    dataloaders = exp.get_dataloaders()
 
     # Get adversarial attack:
     attack = exp.get_attack_for_model(model_to_eval)
