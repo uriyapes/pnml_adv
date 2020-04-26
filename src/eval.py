@@ -60,6 +60,9 @@ def main():
     parser.add_argument('-p', '--general.param_file_path', default=os.path.join('./src/parameters', 'eval_mnist_params.json'),
                         help='param file path used to load the parameters file containing default values to all '
                              'parameters', type=str)
+    # parser.add_argument('-p', '--general.param_file_path', default='src/tests/test_mnist_pgd_with_pnml_expected_result/params.json',
+    #                     help='param file path used to load the parameters file containing default values to all '
+    #                          'parameters', type=str)
     parser.add_argument('-o', '--general.output_root', default='output', help='the output directory where results will be saved', type=str)
 
     parser.add_argument('-f', '--adv_attack_test.test_start_idx', help='first test idx', type=int)

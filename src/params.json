@@ -217,7 +217,7 @@
             "step_size": [5],
             "gamma": 0.1,
             "weight_decay": 0.0001,
-            "fix_type": "pgd",
+            "attack_type": "pgd",
             "epsilon": 0.1,
             "pgd_iter": 1,
             "pgd_step": 0.1,

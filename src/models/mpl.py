@@ -55,30 +55,45 @@ class PnmlModel(ModelTemplate):
         # self.refine = get_attack("pgd", self.base_model, self.gamma, params["pgd_iter"], params["pgd_step"], False,
         #                          self.clamp, 1)
         self.loss_fn = torch.nn.CrossEntropyLoss(reduction='sum')  # reduction='none' The loss is config with reduction='none' so the grad of each sample won't be effected by other samples
-        #     TODO : support larger batch sizes.
         self.regularization = torch.zeros([1])  # This value stores the risk
         # self.training = False
         self.num_classes = num_classes
         self.genie_prob = None
         self.pnml_model = True
 
+    # def forward(self, x):
+    #     genie_prob = torch.zeros([x.shape[0], self.num_classes], requires_grad=True).to(x.device)
+    #     for label in range(self.num_classes):
+    #         # print("Label: {}".format(label))
+    #         torch_label = torch.ones([x.shape[0]], dtype=torch.long).to(x.device) * label
+    #         genie_prob[:, label] = F.softmax(self.forward_genie(x, torch_label), dim=1)[:, label]
+    #     self.genie_prob = genie_prob
+    #     pnml_prob = genie_prob / genie_prob.sum(dim=1, keepdim=True)
+    #     pnml_prob_sum = genie_prob.sum(dim=1, keepdim=False)
+    #     self.regularization = torch.log(pnml_prob_sum)  # This is the regret, each sample in the batch has it's own regret.
+    #     # assert(torch.allclose(pnml_prob.sum(dim=1), ))
+    #     return pnml_prob
+
     def forward(self, x):
-        genie_prob = torch.zeros([x.shape[0], self.num_classes], requires_grad=True).to(x.device)
+        batch_size = x.shape[0]
+        genie_prob = torch.zeros([batch_size, self.num_classes], requires_grad=True).to(x.device)
+        x_refined = self.refine.create_adversarial_sample(x, None)
+        x_refined_flat = torch.flatten(x_refined, start_dim=0, end_dim=1)
+        prob_x_refine = F.softmax(self.forward_base_model(x_refined_flat, True), dim=1)
+        prob_x_refine = prob_x_refine.view(self.num_classes, batch_size, self.num_classes)
         for label in range(self.num_classes):
             # print("Label: {}".format(label))
-            torch_label = torch.ones([x.shape[0]], dtype=torch.long).to(x.device) * label
-            genie_prob[:, label] = F.softmax(self.forward_genie(x, torch_label), dim=1)[:, label]
+            genie_prob[:, label] = prob_x_refine[label, :, label]  # Take the probability of the refined label
         self.genie_prob = genie_prob
         pnml_prob = genie_prob / genie_prob.sum(dim=1, keepdim=True)
         pnml_prob_sum = genie_prob.sum(dim=1, keepdim=False)
         self.regularization = torch.log(pnml_prob_sum)  # This is the regret, each sample in the batch has it's own regret.
-        # assert(torch.allclose(pnml_prob.sum(dim=1), ))
         return pnml_prob
 
     def forward_genie(self, x, label):
         # x.requires_grad = True
-        x_genie = self.refine.create_adversarial_sample(x, None, label) #.detach()  # TODO: remove detach  and no_grad_flag=True to enable white-box attacks
-        return self.forward_base_model(x_genie, no_grad_flag=False) #.detach()
+        x_genie = self.refine.create_adversarial_sample(x, None, label)  #.detach()  # TODO: remove detach  and no_grad_flag=True to enable white-box attacks
+        return self.forward_base_model(x_genie, True)  #.detach()
 
     def get_genie_prob(self):
         return self.genie_prob.detach().clone()
@@ -95,11 +110,8 @@ class PnmlModel(ModelTemplate):
         x_genie = (x - adv_grad_sign * self.gamma * (mnist_max_val - mnist_min_val))
         return self.forward_base_model(x_genie)
 
-    def forward_base_model(self, x, no_grad_flag=False):
-        if no_grad_flag:
-            with torch.no_grad():
-                return self.base_model(x)
-        else:
+    def forward_base_model(self, x, enable_grad=True):
+        with torch.set_grad_enabled(enable_grad):
             return self.base_model(x)
 
     def state_dict(self):

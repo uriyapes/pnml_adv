@@ -59,6 +59,57 @@ def fgsm(model: Module,
     # x_adv.requires_grad = False
     return x_adv
 
+def fgsm_all_labels(model: Module,
+         x: torch.Tensor,
+         y: torch.Tensor,
+         loss_fn: Callable,
+         eps: float,
+         y_target = None,
+         clamp: Tuple[float, float] = (0, 1),
+         retain_graph=True, class_num = 10) -> torch.Tensor:
+    """Creates an adversarial sample using the Fast Gradient-Sign Method (FGSM)
+
+    This is a white-box attack.
+
+    Args:
+        model: Model
+        x: Batch of samples
+        y: Corresponding labels
+        loss_fn: Loss function to maximise
+        eps: Size of adversarial perturbation
+        clamp: Max and minimum values of elements in the samples i.e. (0, 1) for MNIST
+
+    Returns:
+        x_adv: Adversarially perturbed version of x
+    """
+    loss_fn = torch.nn.CrossEntropyLoss(reduction="none")
+    # optimizer = torch.optim.SGD(model.parameters(), 0)
+    # optimizer.zero_grad()
+    # # x.grad = None
+    # if x.grad is not None:
+    #     x.grad.detach_()
+    #     x.grad.zero_()
+    batch_size = x.shape[0]
+    labels_mat = torch.arange(0, class_num, dtype=torch.long, device=x.device).unsqueeze(dim=0).expand(batch_size, class_num)
+
+    x_fgsm = x.clone().to(x.device)
+    x_fgsm.retain_grad()  # backward don't calculate grad for non-leaf unless retain_grad() is invoked (in addition to requires_grad)
+    if x_fgsm.requires_grad is False:
+        x_fgsm.requires_grad = True
+
+    targeted = y_target is not None
+    prediction = model(x_fgsm)
+    pred_mat = prediction.unsqueeze(dim=2).repeat(1, 1, class_num)
+    # loss = loss_fn(pred_mat, labels_mat).mean(dim=0)
+    # # loss.backward(retain_graph=retain_graph)
+    x_adv = torch.zeros_like(x_fgsm, device=x.device).unsqueeze(dim=0).repeat([class_num] + [1 for i in range(x_fgsm.dim())])
+    for i in range(class_num):
+        loss = loss_fn(pred_mat[:,:,i], labels_mat[:,i]).mean(dim=0)
+        x_adv_grad = torch.autograd.grad(loss, x_fgsm, create_graph=False, retain_graph=True)[0]
+        x_grad_sign = torch.sign(x_adv_grad).detach()
+        x_adv[i] = (x - x_grad_sign * eps).clamp(*clamp)  #.detach()
+    return x_adv
+
 
 def _iterative_gradient(model: Module,
                         x: torch.Tensor,

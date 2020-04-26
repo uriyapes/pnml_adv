@@ -129,7 +129,7 @@ class FGSM(Attack):
         Returns:
             x_adv: Adversarially perturbed version of x
         """
-        return fgsm(self.model, x, y, self.loss_fn, self.eps, y_target, self.clamp)
+        return fgsm_all_labels(self.model, x, y, self.loss_fn, self.eps, y_target, self.clamp)
 
 
 class PGD(Attack):

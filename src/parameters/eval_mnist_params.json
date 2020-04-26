@@ -5,16 +5,16 @@
     "freeze_layer": 0,
     "adv_attack_test": {
         "_comment": "===== MNIST ADVERSARY TESTING =====",
-        "white_box": false,
+        "white_box": true,
         "black_box_adv_path": "./src/unittest_attack/test_mnist_pgd_no_pnml_expected_result/adversarials.t",
         "attack_type": "natural",
         "epsilon": 0.3,
         "pgd_iter": 40,
         "pgd_step": 0.01,
-        "pgd_test_restart_num": 4,
+        "pgd_test_restart_num": 20,
         "beta": 0.0,
         "test_start_idx": 0,
-        "test_end_idx": 199
+        "test_end_idx": 9999
     },
     "model": {
         "_comment": "===== MNIST MODEL =====",
@@ -24,7 +24,7 @@
     },
     "fit_to_sample": {
         "_comment": "===== MNIST PNML=====",
-        "fix_type": "pgd",
+        "attack_type": "fgsm",
         "epsilon": 0.1,
         "pgd_iter": 1,
         "pgd_step": 0.1,
