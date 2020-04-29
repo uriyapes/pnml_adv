@@ -51,7 +51,7 @@ class PnmlModel(ModelTemplate):
         self.gamma = params['epsilon']
         self.clamp = clamp
         self.base_model = base_model
-        self.refine = get_attack(params, self.base_model, self.clamp, num_classes)
+        self.refine = get_attack(params, self.base_model, self.clamp, num_class=num_classes)
         # self.refine = get_attack("pgd", self.base_model, self.gamma, params["pgd_iter"], params["pgd_step"], False,
         #                          self.clamp, 1)
         self.loss_fn = torch.nn.CrossEntropyLoss(reduction='sum')  # reduction='none' The loss is config with reduction='none' so the grad of each sample won't be effected by other samples
@@ -84,10 +84,10 @@ class PnmlModel(ModelTemplate):
         for label in range(self.num_classes):
             # print("Label: {}".format(label))
             genie_prob[:, label] = prob_x_refine[label, :, label]  # Take the probability of the refined label
-        self.genie_prob = genie_prob
         pnml_prob = genie_prob / genie_prob.sum(dim=1, keepdim=True)
         pnml_prob_sum = genie_prob.sum(dim=1, keepdim=False)
         self.regularization = torch.log(pnml_prob_sum)  # This is the regret, each sample in the batch has it's own regret.
+        self.genie_prob = genie_prob.detach()
         return pnml_prob
 
     def forward_genie(self, x, label):
@@ -96,7 +96,7 @@ class PnmlModel(ModelTemplate):
         return self.forward_base_model(x_genie, True)  #.detach()
 
     def get_genie_prob(self):
-        return self.genie_prob.detach().clone()
+        return self.genie_prob.clone()
 
     def calc_log_prob(self, x):
         return torch.log(self.__call__(x))
