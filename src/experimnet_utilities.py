@@ -199,7 +199,7 @@ class Experiment:
         model = ImagenetModel(model, self.params["num_classes"]) if self.exp_type == "imagenet_adversarial" else model
         if pnml_model_flag:
             model = PnmlModel(model, self.params['fit_to_sample'], get_dataset_min_max_val(self.exp_type), self.params["num_classes"])
-
+        model.ckpt_path = ckpt_path
         return model
 
     def get_exp_name(self):

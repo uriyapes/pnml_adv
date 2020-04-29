@@ -55,9 +55,9 @@ def eval_black_box(model_to_eval, model_to_attack, dataloader, attack):
 
 def main():
     parser = jsonargparse.ArgumentParser(description='General arguments', default_meta=False)
-    parser.add_argument('-t', '--general.experiment_type', default='mnist_adversarial',
+    parser.add_argument('-t', '--general.experiment_type', default='imagenet_adversarial',
                         help='Type of experiment to execute', type=str)
-    parser.add_argument('-p', '--general.param_file_path', default=os.path.join('./src/parameters', 'eval_mnist_params.json'),
+    parser.add_argument('-p', '--general.param_file_path', default=os.path.join('./src/parameters', 'eval_imagenet_param.json'),
                         help='param file path used to load the parameters file containing default values to all '
                              'parameters', type=str)
     # parser.add_argument('-p', '--general.param_file_path', default='src/tests/test_mnist_pgd_with_pnml_expected_result/params.json',

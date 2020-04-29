@@ -12,6 +12,7 @@ class ModelTemplate(nn.Module, ABC):
         super(ModelTemplate, self).__init__()
         self.pnml_model = False
         self.regularization = TorchUtils.to_device(torch.zeros([1]))
+        self.ckpt_path = None
 
     def freeze_all_layers(self):
         for param in self.parameters():

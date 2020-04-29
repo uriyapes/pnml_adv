@@ -98,7 +98,7 @@ class FGSM(Attack):
                  model: Module,
                  loss_fn: Callable,
                  eps_ratio: float,
-                 clamp: Tuple[float, float] = (0, 1)):
+                 num_class, clamp: Tuple[float, float] = (0, 1)):
         """
         :param model: the model which will be used to create the adversarial examples, pay attention that as the model
         changes (by training) so is the adversarial examples created
@@ -112,6 +112,7 @@ class FGSM(Attack):
         self.model = model
         self.loss_fn = loss_fn()
         self.eps_ratio = eps_ratio
+        self.num_class = num_class
         self.clamp = clamp
         self.eps = self.eps_ratio * (self.clamp[1] - self.clamp[0])
 
@@ -129,7 +130,7 @@ class FGSM(Attack):
         Returns:
             x_adv: Adversarially perturbed version of x
         """
-        return fgsm_all_labels(self.model, x, y, self.loss_fn, self.eps, y_target, self.clamp)
+        return fgsm_all_labels(self.model, x, y, self.loss_fn, self.eps, y_target, self.clamp, class_num=self.num_class)
 
 
 class PGD(Attack):
@@ -207,7 +208,7 @@ class Boundary(Attack):
 
 
 def get_attack(attack_params: dict, model: Module = None, clamp: Tuple[float, float] = (0, 1),
-               loss_fn: Callable = torch.nn.CrossEntropyLoss, flip_grad_ratio=0.0):
+               loss_fn: Callable = torch.nn.CrossEntropyLoss, flip_grad_ratio=0.0, num_class:int = 10):
     """
     :param attack_params: a dictionary containing attack parameters. Dictionary keys:
         attack_type
@@ -226,7 +227,7 @@ def get_attack(attack_params: dict, model: Module = None, clamp: Tuple[float, fl
     elif attack_params["attack_type"] == "natural":
         attack = Natural(model)
     elif attack_params["attack_type"] == 'fgsm':
-        attack = FGSM(model, loss_fn, attack_params["epsilon"], clamp)
+        attack = FGSM(model, loss_fn, attack_params["epsilon"], num_class, clamp)
     elif attack_params["attack_type"] == 'pgd':
         # attack = PGD(model, loss_fn, eps, iter, step_size, random, clamp, 'inf', restart_num, beta, flip_grad_ratio)
         attack = PGD(model, loss_fn, attack_params, clamp, 'inf', flip_grad_ratio)

@@ -40,7 +40,7 @@ def get_dataset_min_max_val(dataset_name: str, dtype=None):
         return cifar_min_val, cifar_max_val
     elif dataset_name == 'mnist_adversarial':
         return _calc_normalized_val(0, mean_mnist, mnist_std, dtype), _calc_normalized_val(1, mean_mnist, mnist_std, dtype)
-    elif dataset_name == 'imagenet':
+    elif dataset_name == 'imagenet_adversarial':
         return imagenet_min_val, imagenet_max_val
     else:
         raise NameError("No experiment name:" + dataset_name)
@@ -208,7 +208,7 @@ def create_tensor_dataloader(input: torch.Tensor, labels: torch.Tensor, batch_si
 def create_imagenet_test_loader(data_dir: str = './data', batch_size: int = 128, num_workers: int = 4, start_idx=0, end_idx=49, labels_to_test=1000):
     # normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
     #                                  std=[0.229, 0.224, 0.225])
-    bounds = get_dataset_min_max_val("imagenet")
+    bounds = get_dataset_min_max_val("imagenet_adversarial")
     imagenet_transform = transforms.Compose([
             # transforms.Resize(256),
             transforms.CenterCrop(288),
@@ -221,7 +221,7 @@ def create_imagenet_test_loader(data_dir: str = './data', batch_size: int = 128,
                                  download=False,
                                  transform=imagenet_transform)
     samples_per_label = end_idx - start_idx + 1
-    total_samples_per_label = 50
+    total_samples_per_label = 50  # The number of images for each label in the evaluation set
     assert(samples_per_label <= total_samples_per_label)
     indices = [i for start_label_idx in range(0, labels_to_test*total_samples_per_label, total_samples_per_label)
                for i in range(start_label_idx, start_label_idx + samples_per_label)]
