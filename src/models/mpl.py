@@ -45,12 +45,13 @@ mnist_max_val = (1 - mean_mnist) / mnist_std
 
 
 class PnmlModel(ModelTemplate):
-    def __init__(self, base_model, params, clamp, num_classes=10):
+    def __init__(self, base_model, params, clamp, num_classes=10, pnml_model_keep_grad=True):
         super().__init__()
         self.params = params
         self.gamma = params['epsilon']
         self.clamp = clamp
         self.base_model = base_model
+        self.pnml_model_keep_grad = pnml_model_keep_grad
         self.refine = get_attack(params, self.base_model, self.clamp, num_class=num_classes)
         # self.refine = get_attack("pgd", self.base_model, self.gamma, params["pgd_iter"], params["pgd_step"], False,
         #                          self.clamp, 1)
@@ -77,17 +78,18 @@ class PnmlModel(ModelTemplate):
     def forward(self, x):
         batch_size = x.shape[0]
         genie_prob = torch.zeros([batch_size, self.num_classes], requires_grad=True).to(x.device)
-        x_refined = self.refine.create_adversarial_sample(x, None)
+        x_refined = self.refine.create_adversarial_sample(x, None)  #TODO: if pnml_model_keep_grad=False, detach the refined samples inside the create_adversarial_sample method
         x_refined_flat = torch.flatten(x_refined, start_dim=0, end_dim=1)
-        prob_x_refine = F.softmax(self.forward_base_model(x_refined_flat, True), dim=1)
-        prob_x_refine = prob_x_refine.view(self.num_classes, batch_size, self.num_classes)
-        for label in range(self.num_classes):
-            # print("Label: {}".format(label))
-            genie_prob[:, label] = prob_x_refine[label, :, label]  # Take the probability of the refined label
-        pnml_prob = genie_prob / genie_prob.sum(dim=1, keepdim=True)
-        pnml_prob_sum = genie_prob.sum(dim=1, keepdim=False)
-        self.regularization = torch.log(pnml_prob_sum)  # This is the regret, each sample in the batch has it's own regret.
-        self.genie_prob = genie_prob.detach()
+        with torch.set_grad_enabled(self.pnml_model_keep_grad):
+            prob_x_refine = F.softmax(self.forward_base_model(x_refined_flat), dim=1)
+            prob_x_refine = prob_x_refine.view(self.num_classes, batch_size, self.num_classes)
+            for label in range(self.num_classes):
+                # print("Label: {}".format(label))
+                genie_prob[:, label] = prob_x_refine[label, :, label]  # Take the probability of the refined label
+            pnml_prob = genie_prob / genie_prob.sum(dim=1, keepdim=True)
+            pnml_prob_sum = genie_prob.sum(dim=1, keepdim=False)
+            self.regularization = torch.log(pnml_prob_sum)  # This is the regret, each sample in the batch has it's own regret.
+            self.genie_prob = genie_prob.detach()
         return pnml_prob
 
     def forward_genie(self, x, label):
@@ -110,9 +112,8 @@ class PnmlModel(ModelTemplate):
         x_genie = (x - adv_grad_sign * self.gamma * (mnist_max_val - mnist_min_val))
         return self.forward_base_model(x_genie)
 
-    def forward_base_model(self, x, enable_grad=True):
-        with torch.set_grad_enabled(enable_grad):
-            return self.base_model(x)
+    def forward_base_model(self, x):
+        return self.base_model(x)
 
     def state_dict(self):
         return self.base_model.state_dict()

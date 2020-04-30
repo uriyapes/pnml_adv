@@ -1,6 +1,7 @@
 import jsonargparse
 import os
 import torch
+import time
 
 import logger_utilities
 from experimnet_utilities import Experiment
@@ -25,15 +26,19 @@ def eval_adversarial_dataset(model, dataloader, attack):
     loss = 0
     correct = 0
     adversarials = None
+    logger.info("Starting eval...")
     for iter_num, (data, labels) in enumerate(dataloader):
-        logger.info("eval_model iter_num: {}".format(iter_num))
 
+        t0 = time.time()
         data, labels = TorchUtils.to_device(data), TorchUtils.to_device(labels)
         adversarials_batch = attack.create_adversarial_sample(data, labels, get_adversarial_class=True)
+        t1 = time.time()
         if iter_num == 0:
             adversarials = adversarials_batch
         else:
             adversarials.merge(adversarials_batch)
+        t2 = time.time()
+        logger.info("eval_model iter_num: {} ,process time: {} save time: {} ".format(iter_num, t1-t0, t2-t1))
         # outputs, batch_loss = TrainClass.__forward_pass(model, data, labels, loss_func)
         #
         # loss += float(batch_loss.detach_()) * len(data)  # loss sum for all the batch
@@ -86,7 +91,7 @@ def main():
 
     # Get models:
     model_to_eval = exp.get_model(exp.params['model']['model_arch'], exp.params['model']['ckpt_path'],
-                                  exp.params['model']['pnml_active'])
+                                  exp.params['model']['pnml_active'], True if exp.params["adv_attack_test"]["attack_type"] != "natural" else False)
 
     dataloaders = exp.get_dataloaders()
 

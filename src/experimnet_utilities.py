@@ -162,7 +162,7 @@ class Experiment:
         dataloaders['dataset_name'] = self.exp_type
         return dataloaders
 
-    def get_model(self, model_arch: str, ckpt_path: str, pnml_model_flag: bool = False):
+    def get_model(self, model_arch: str, ckpt_path: str, pnml_model_flag: bool = False, pnml_model_keep_grad: bool =True):
         """
         Load a untrained or trained model according to the experiment type and if a ckpt_path is given.
         :param model_arch: the architecture of the model
@@ -198,7 +198,7 @@ class Experiment:
         model = load_pretrained_model(model, ckpt_path) if ckpt_path is not None else model
         model = ImagenetModel(model, self.params["num_classes"]) if self.exp_type == "imagenet_adversarial" else model
         if pnml_model_flag:
-            model = PnmlModel(model, self.params['fit_to_sample'], get_dataset_min_max_val(self.exp_type), self.params["num_classes"])
+            model = PnmlModel(model, self.params['fit_to_sample'], get_dataset_min_max_val(self.exp_type), self.params["num_classes"], pnml_model_keep_grad)
         model.ckpt_path = ckpt_path
         return model
 
