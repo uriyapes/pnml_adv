@@ -7,7 +7,7 @@
     "adv_attack_test": {
         "_comment": "===== IMAGE-NET ADV. TESTING =====",
         "white_box": true,
-        "black_box_adv_path": "./src/unittest_attack/test_mnist_pgd_no_pnml_expected_result/adversarials.t",
+        "black_box_adv_path": "./output/imagenet_pgd_diff_eps/imagenet_adversarial_results_20200503_121531/adversarials.t",
         "attack_type": "natural",
         "epsilon": 0.0156862745098,
         "pgd_iter": 50,
@@ -26,9 +26,9 @@
     "fit_to_sample": {
         "_comment": "===== IMAGE-NET PNML=====",
         "attack_type": "fgsm",
-        "epsilon": 0.0156862745098,
+        "epsilon": 0.01176,
         "pgd_iter": 1,
-        "pgd_step": 0.00392156862,
+        "pgd_step":  0.01176,
         "pgd_test_restart_num": 0
     }
 }

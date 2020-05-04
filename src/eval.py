@@ -7,10 +7,11 @@ import logger_utilities
 from experimnet_utilities import Experiment
 from utilities import TorchUtils
 TorchUtils.set_rnd_seed(1)
+# Uncomment for performance. Comment for debug and reproducibility
+torch.backends.cudnn.benchmark = True
+torch.backends.cudnn.deterministic = False
 from train_utilities import TrainClass
 import json
-
-
 
 
 def eval_adversarial_dataset(model, dataloader, attack):
@@ -27,25 +28,23 @@ def eval_adversarial_dataset(model, dataloader, attack):
     correct = 0
     adversarials = None
     logger.info("Starting eval...")
+    adv_batch_l = []
     for iter_num, (data, labels) in enumerate(dataloader):
 
         t0 = time.time()
         data, labels = TorchUtils.to_device(data), TorchUtils.to_device(labels)
         adversarials_batch = attack.create_adversarial_sample(data, labels, get_adversarial_class=True)
         t1 = time.time()
-        if iter_num == 0:
-            adversarials = adversarials_batch
-        else:
-            adversarials.merge(adversarials_batch)
-        t2 = time.time()
-        logger.info("eval_model iter_num: {} ,process time: {} save time: {} ".format(iter_num, t1-t0, t2-t1))
-        # outputs, batch_loss = TrainClass.__forward_pass(model, data, labels, loss_func)
-        #
-        # loss += float(batch_loss.detach_()) * len(data)  # loss sum for all the batch
-        # _, predicted = torch.max(outputs.detach_().data, 1)
-        # correct += (predicted == labels).sum().item()
-        # if (predicted == labels).sum().item() == 1:
-        #     print("correct prediction in iter_num: {}".format(iter_num))
+        adv_batch_l.append(adversarials_batch)
+        logger.info("eval_model iter_num: {} ,process time: {} ".format(iter_num, t1 - t0))
+        # if iter_num == 0:
+        #     adversarials = adversarials_batch
+        # else:
+        #     adversarials.merge(adversarials_batch)
+        # t2 = time.time()
+        # logger.info("eval_model iter_num: {} ,process time: {} save time: {} ".format(iter_num, t1-t0, t2-t1))
+
+    adversarials = adv_batch_l[0].cat(adv_batch_l)
     return adversarials
 
 

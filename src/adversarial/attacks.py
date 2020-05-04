@@ -3,7 +3,7 @@ from abc import ABC, abstractmethod
 from adversarial.functional import *
 import torch
 import os
-from typing import Union
+from typing import Union, List
 
 
 class Adversarials(object):
@@ -47,11 +47,25 @@ class Adversarials(object):
             self.genie_prob = torch.cat([self.genie_prob, adv.genie_prob])
             self.regret = torch.cat([self.regret, torch.log(adv.genie_prob.sum(dim=1, keepdim=False))])
 
+    @staticmethod
+    def cat(adv_l: List):
+        adv_l[0].original_sample = torch.cat([adv.original_sample for adv in adv_l], dim=0) if adv_l[0].original_sample is not None else None
+        adv_l[0].true_label = torch.cat([adv.true_label for adv in adv_l])
+        adv_l[0].adversarial_sample = torch.cat([adv.adversarial_sample for adv in adv_l]) if adv_l[0].adversarial_sample is not None else None
+        adv_l[0].probability = torch.cat([adv.probability for adv in adv_l])
+        adv_l[0].predict = torch.cat([adv.predict for adv in adv_l])
+        adv_l[0].correct = torch.cat([adv.correct for adv in adv_l])
+        adv_l[0].loss = torch.cat([adv.loss for adv in adv_l])
+        if adv_l[0].genie_prob is not None:
+            adv_l[0].genie_prob = torch.cat([adv.genie_prob for adv in adv_l])
+            adv_l[0].regret = torch.cat([adv.regret for adv in adv_l])
+        return adv_l[0]
+
     def dump(self, path_to_folder):
         torch.save(self, os.path.join(path_to_folder, "adversarials.t"))
 
     def get_mean_loss(self):
-        return self.loss.sum() / len(self.loss)
+        return self.loss.sum().item() / len(self.loss)
 
     def get_accuracy(self):
         return self.correct.sum().item() / len(self.correct)
