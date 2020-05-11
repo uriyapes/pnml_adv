@@ -80,7 +80,8 @@ class Experiment:
         dataloader = dict()
         dataloader['test'], dataloader['classes'] = create_tensor_dataloader(adv.adversarial_sample, adv.true_label,
                                                              batch_size=self.params["batch_size"], num_workers=self.params["num_workers"],
-                                                             start_idx=p["test_start_idx"], end_idx=p["test_end_idx"])
+                                                             start_idx=p["test_start_idx"], end_idx=p["test_end_idx"],
+                                                             idx_step_size=p.get('idx_step_size'), labels_to_test=p.get('num_classes'))
         dataloader['dataset_name'] = self.exp_type
         dataloader["black_box_attack_params"] = adv.attack_params
         return dataloader
@@ -126,8 +127,8 @@ class Experiment:
                                                               self.params['batch_size'], self.params['num_workers'],
                                                               self.params['adv_attack_test']['test_start_idx'],
                                                               self.params['adv_attack_test']['test_end_idx'],
-                                                              self.params["num_classes"]
-                                                              )
+                                                              self.params['adv_attack_test']["idx_step_size"],
+                                                              self.params['num_classes'])
             dataloaders = {'test': testloader,
                            'classes': classes,
                            'bounds': bounds}

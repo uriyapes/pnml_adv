@@ -44,7 +44,7 @@ def plt_img(image_batch, index_list=[0], is_save_fig=False):
             img = np.moveaxis(img, (0,1,2), (2,0,1))  # Make img shape HxWxC
             print(img.shape)
         subplot.imshow(img, cmap='gray')  #  cmap ignored if img is 3-D
-        # plt.show()
+        plt.show()
     plt.savefig('./adv_output_images.jpg', bbox_inches=plt.tight_layout()) if is_save_fig else None
 
 

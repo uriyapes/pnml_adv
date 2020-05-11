@@ -87,7 +87,7 @@ def main():
 
     exp = Experiment(general_args, args)
     logger_utilities.init_logger(logger_name=exp.get_exp_name(), output_root=exp.output_dir)
-
+    logger = logger_utilities.get_logger()
     # Get models:
     model_to_eval = exp.get_model(exp.params['model']['model_arch'], exp.params['model']['ckpt_path'],
                                   exp.params['model']['pnml_active'], True if exp.params["adv_attack_test"]["attack_type"] != "natural" else False)
@@ -97,7 +97,7 @@ def main():
     # Get adversarial attack:
     attack = exp.get_attack_for_model(model_to_eval)
 
-    logger = logger_utilities.get_logger()
+
     with open(os.path.join(logger.output_folder, 'params.json'), 'w', encoding='utf8') as outfile:
         outfile.write(json.dumps(exp.params, indent=4, sort_keys=False))
     logger.info(exp.params)

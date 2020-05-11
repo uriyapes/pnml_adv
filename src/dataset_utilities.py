@@ -8,6 +8,7 @@ from torch.utils import data
 from torchvision import transforms, datasets
 from PIL import Image
 from utilities import TorchUtils
+from typing import Union
 
 # Normalization for CIFAR10 dataset
 mean_cifar10 = (0.4914, 0.4822, 0.4465),
@@ -192,9 +193,13 @@ def generate_noise_sample():
 
 
 def create_tensor_dataloader(input: torch.Tensor, labels: torch.Tensor, batch_size: int = 128, num_workers: int = 4,
-                             start_idx: int = 0, end_idx: int = 49, labels_to_test: int = 10):
+                             start_idx: int = 0, end_idx: int = 49, idx_step_size: Union[int, None] = 1, labels_to_test: Union[int, None] = 10):
+    if labels_to_test is None:
+        labels_to_test = 10
+    if idx_step_size is None:
+        idx_step_size = 1
     testset = data.TensorDataset(input, labels)
-    indices = [i for i in range(start_idx, end_idx+1)]
+    indices = [i for i in range(start_idx, end_idx+1, idx_step_size)]
     testset = data.Subset(testset, indices=indices)
     testloader = data.DataLoader(testset,
                                  batch_size=batch_size,
@@ -205,7 +210,18 @@ def create_tensor_dataloader(input: torch.Tensor, labels: torch.Tensor, batch_si
     return testloader, classes
 
 
-def create_imagenet_test_loader(data_dir: str = './data', batch_size: int = 128, num_workers: int = 4, start_idx=0, end_idx=49, labels_to_test=1000):
+def create_imagenet_test_loader(data_dir: str = './data', batch_size: int = 128, num_workers: int = 4, start_idx=0,
+                                end_idx=4999, idx_step_size=1, num_classes: int = 100):
+    """
+    :param data_dir: The location of the data root directory
+    :param batch_size: the batch size to analyze
+    :param num_workers: dataloader workers
+    :param start_idx: The first idx in indices range
+    :param end_idx: The last idx in indices range
+    :param idx_step_size: The idx step size in indices range
+    :param num_classes: The total number of classes to analyze
+    :return: A dataloader containing indices = range(start_idx, end_idx+1, idx_step_size) constituting at most num_classes
+    """
     # normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
     #                                  std=[0.229, 0.224, 0.225])
     bounds = get_dataset_min_max_val("imagenet_adversarial")
@@ -220,11 +236,16 @@ def create_imagenet_test_loader(data_dir: str = './data', batch_size: int = 128,
                                  split='val',
                                  download=False,
                                  transform=imagenet_transform)
-    samples_per_label = end_idx - start_idx + 1
     total_samples_per_label = 50  # The number of images for each label in the evaluation set
-    assert(samples_per_label <= total_samples_per_label)
-    indices = [i for start_label_idx in range(0, labels_to_test*total_samples_per_label, total_samples_per_label)
-               for i in range(start_label_idx, start_label_idx + samples_per_label)]
+    # samples_per_label = end_idx - start_idx + 1
+
+    # assert(samples_per_label <= total_samples_per_label)
+    # indices = [i for start_label_idx in range(0, labels_to_test*total_samples_per_label, total_samples_per_label)
+    #            for i in range(start_label_idx, start_label_idx + samples_per_label)]
+
+    indices = range(start_idx, end_idx+1, idx_step_size)
+    assert(max(indices) <= total_samples_per_label * num_classes)
+    print("create_imagenet_test_loader using indices:" + str(indices))
     testset = data.Subset(testset, indices=indices)
     testloader = data.DataLoader(testset,
                                  batch_size=batch_size,
@@ -232,7 +253,7 @@ def create_imagenet_test_loader(data_dir: str = './data', batch_size: int = 128,
                                  num_workers=num_workers,
                                  pin_memory=True)
 
-    classes = [str(i) for i in range(labels_to_test)]
+    classes = [str(i) for i in range(num_classes)]
     return testloader, classes, bounds
 
 
