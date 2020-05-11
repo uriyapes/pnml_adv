@@ -1,37 +1,39 @@
 import torch
-import argparse
+import jsonargparse
 from deepfool.foolbox import foolbox
 import numpy as np
 import os
 import sys
 import pandas as pd
-from logger_utilities import Logger
+import logger_utilities
+import logging
 from experimnet_utilities import Experiment
 from dataset_utilities import get_dataset_min_max_val
 from utilities import TorchUtils
-import logging
 import time
-# TorchUtils.set_device("cpu")
 import multiprocessing as mp
 import glob
 import pickle
 
-torch.backends.cudnn.benchmark = False
+TorchUtils.set_rnd_seed(1)
+# Uncomment for performance. Comment for debug and reproducibility
+torch.backends.cudnn.benchmark = True
+torch.backends.cudnn.deterministic = False
 
-def eval_batch(images: np.ndarray, labels: np.ndarray, iterations: int, batch_iteration: int, experiment_h: Experiment, logger: Logger):
-    batch_size = 50  # TODO: read value from params
+def eval_batch(images: np.ndarray, labels: np.ndarray, iterations: int, batch_iteration: int, exp: Experiment, logger: logger_utilities.Logger):
     logger.info("Create model...")
-    # model = experiment_h.get_model("PnmlModel", "./trained_models/mnist_classifier/bpda_ep6_eps0.3_restant20_uniformRnd/model_iter_6.pt")
-    model = experiment_h.get_model("RST", "./trained_models/downloaded_models/rst_adv.pt.ckpt")
-    model.eval()
-    model.freeze_all_layers()
+    # model = exp.get_model("PnmlModel", "./trained_models/mnist_classifier/bpda_ep6_eps0.3_restant20_uniformRnd/model_iter_6.pt")
+    model_to_eval = exp.get_model(exp.params['model']['model_arch'], exp.params['model']['ckpt_path'],
+                                  exp.params['model']['pnml_active'], False)
+    model_to_eval.eval()
+    model_to_eval.freeze_all_layers()
     logger.info("Create foolbox model and attack...")
     # low_bound, upper_bound = get_dataset_min_max_val("mnist_adversarial", dtype=np.float32)
-    low_bound, upper_bound = get_dataset_min_max_val("cifar_adversarial", dtype=np.float32)
-    fmodel = foolbox.models.PyTorchModel(model, bounds=(float(low_bound), float(upper_bound)), num_classes=10)
+    low_bound, upper_bound = get_dataset_min_max_val(exp.exp_type, dtype=np.float32)
+    fmodel = foolbox.models.PyTorchModel(model_to_eval, bounds=(float(low_bound), float(upper_bound)), num_classes=exp.params["num_classes"])
     attack = foolbox.attacks.HopSkipJumpAttack(fmodel, distance=foolbox.distances.Linf)
-    adversarials_batch = attack(images, labels, iterations=iterations, unpack=False, log_every_n_steps=None,
-                                loggingLevel=logging.WARNING, batch_size=batch_size)
+    adversarials_batch = attack(images, labels, iterations=iterations, unpack=False, log_every_n_steps=1,
+                                loggingLevel=logging.INFO, batch_size=exp.params["batch_size"])
 
     adversarials_batch_repack, _ = repack_adversarial_results(adversarials_batch)
     logger.dump_pickle(adversarials_batch_repack, "adv_batch_%.2d.p" % (batch_iteration))
@@ -41,7 +43,7 @@ def eval_batch(images: np.ndarray, labels: np.ndarray, iterations: int, batch_it
 def eval_dataset(dataloader, iterations, logger, experiment_h):
     logger.info("Starting eval_hopskipjump with {} iterations".format(iterations))
     t1 = time.time()
-    timeout = 10000
+    timeout = 1000000
     for batch_iteration, (images, labels) in enumerate(dataloader):
         images, labels = images.numpy(), labels.numpy()
         while True:
@@ -56,38 +58,47 @@ def eval_dataset(dataloader, iterations, logger, experiment_h):
                 break
             else:
                 if p.exitcode == 0:
-                    logger.info("Stopping eval_hopskipjump batch number: {} after timeout {}".format(batch_iteration, timeout))
+                    logger.info("Stopping eval_hopskipjump batch number: {} after timeout {}".format(batch_iteration, (time.time() - t1)))
                 else:
-                    logger.info("Error, during batch {} process exit with exitcode {} after time: {}".format(batch_iteration, p.exitcode, timeout))
+                    logger.info("Error, during batch {} process exit with exitcode {} after time: {}".format(batch_iteration, p.exitcode, (time.time() - t1)))
                 p.terminate()
                 p.join()
 
 
 def _main():
     mp.set_start_method('spawn')
-    parser = argparse.ArgumentParser(description='Applications of Deep PNML')
-    parser.add_argument('-t', '--experiment_type', default='cifar_adversarial',
+    parser = jsonargparse.ArgumentParser(description='General arguments', default_meta=False)
+    parser.add_argument('-t', '--general.experiment_type', default='imagenet_adversarial',
                         help='Type of experiment to execute', type=str)
-    parser.add_argument('-f', '--first_idx', default=None, help='first test idx', type=int)
-    parser.add_argument('-l', '--last_idx', default=None, help='last test idx', type=int)
-    parser.add_argument('-p', '--param_file_path', default=os.path.join('src', 'params.json'),
+    parser.add_argument('-p', '--general.param_file_path', default=os.path.join('./src/parameters', 'eval_imagenet_param.json'),
                         help='param file path used to load the parameters file containing default values to all '
                              'parameters', type=str)
-    parser.add_argument('-e', '--test_eps', default=None, help='the epsilon strength of the attack', type=float)
-    parser.add_argument('-ts', '--test_step_size', default=None, help='the step size of the attack', type=float)
-    parser.add_argument('-ti', '--test_pgd_iter', default=None, help='the number of test pgd iterations', type=int)
-    parser.add_argument('-r', '--lambda', default=None, help='the epsilon strength of the refinement (lambda)', type=float)
-    parser.add_argument('-b', '--beta', default=None, help='the beta value for regret reduction regularization ', type=float)
-    parser.add_argument('-i', '--fix_pgd_iter', default=None, help='the number of PGD iterations of the refinement', type=int)
-    parser.add_argument('-n', '--fix_pgd_restart_num', default=None, help='the number of PGD restarts where 0 means no random start',
+    # parser.add_argument('-p', '--general.param_file_path', default='src/tests/test_mnist_pgd_with_pnml_expected_result/params.json',
+    #                     help='param file path used to load the parameters file containing default values to all '
+    #                          'parameters', type=str)
+    parser.add_argument('-o', '--general.output_root', default='output', help='the output directory where results will be saved', type=str)
+    parser.add_argument('--adv_attack_test.attack_type', help='attack type', type=str, default="natural")
+    parser.add_argument('-f', '--adv_attack_test.test_start_idx', help='first test idx', type=int)
+    parser.add_argument('-l', '--adv_attack_test.test_end_idx', help='last test idx', type=int)
+    parser.add_argument('-e', '--adv_attack_test.epsilon', help='the epsilon strength of the attack', type=float)
+    parser.add_argument('-ts', '--adv_attack_test.pgd_step', help='the step size of the attack', type=float)
+    parser.add_argument('-ti', '--adv_attack_test.pgd_iter', help='the number of test pgd iterations', type=int)
+    parser.add_argument('-b', '--adv_attack_test.beta', help='the beta value for regret reduction regularization ',
+                               type=float)
+    parser.add_argument('-r', '--fit_to_sample.epsilon', help='the epsilon strength of the refinement (lambda)', type=float)
+    parser.add_argument('-i', '--fit_to_sample.pgd_iter', help='the number of PGD iterations of the refinement', type=int)
+    parser.add_argument('-s', '--fit_to_sample.pgd_step', help='the step size of the refinement', type=float)
+    parser.add_argument('-n', '--fit_to_sample.pgd_test_restart_num', help='the number of PGD restarts where 0 means no random start',
                         type=int)
-    parser.add_argument('-o', '--output_root', default='output', help='the output directory where results will be saved', type=str)
-    args = vars(parser.parse_args())
-    experiment_h = Experiment(args)
+    args = jsonargparse.namespace_to_dict(parser.parse_args())
+    general_args = args.pop('general')
+
+    experiment_h = Experiment(general_args, args)
     dataloaders = experiment_h.get_adv_dataloaders()
     ################
     # Create logger and save params to output folder
-    logger = Logger(experiment_type=experiment_h.get_exp_name(), output_root=experiment_h.output_dir)
+    logger_utilities.init_logger(logger_name=experiment_h.get_exp_name(), output_root=experiment_h.output_dir)
+    logger = logger_utilities.get_logger()
     # logger = Logger(experiment_type='TMP', output_root='output')
     logger.info('OutputDirectory: %s' % logger.output_folder)
     logger.info('Device: %s' % TorchUtils.get_device())
