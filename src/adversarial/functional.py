@@ -66,7 +66,7 @@ def fgsm_all_labels(model: Module,
          eps: float,
          y_target = None,
          clamp: Tuple[float, float] = (0, 1),
-         retain_graph=True, class_num = 100) -> torch.Tensor:
+         class_num = 100) -> torch.Tensor:
     """Creates an adversarial sample using the Fast Gradient-Sign Method (FGSM)
 
     This is a white-box attack.

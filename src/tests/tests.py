@@ -2,6 +2,9 @@ import json
 import unittest
 import os
 import torch
+import time
+import sys
+sys.path.extend(['./src'])
 from experimnet_utilities import Experiment
 import logger_utilities
 from eval import eval_adversarial_dataset
@@ -27,8 +30,9 @@ class TestModel(unittest.TestCase):
         adv_expected = torch.load(os.path.join(self.expected_result_folder, 'adversarials.t'))
 
         model_to_eval, dataloaders, attack = self._prepare_test()
-        adv = eval_adversarial_dataset(model_to_eval, dataloaders['test'], attack)
-
+        # t = time.time()
+        adv = eval_adversarial_dataset(model_to_eval, dataloaders['test'], attack, True)
+        # print("time: {}".format(time.time() - t))
         self.logger.info("Accuracy: {}, Loss: {}".format(adv.get_accuracy(), adv.get_mean_loss()))
         # self.assertEqual(adv.attack_params, adv_expected.attack_params)
         self.assertTrue(torch.equal(adv.adversarial_sample, adv.adversarial_sample))

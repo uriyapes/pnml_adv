@@ -14,12 +14,13 @@ from train_utilities import TrainClass
 import json
 
 
-def eval_adversarial_dataset(model, dataloader, attack):
+def eval_adversarial_dataset(model, dataloader, attack, save_adv_sample: bool =False):
     """
     Evaluate model performance on dataloader with attack
     :param model:
     :param dataloader:
     :param attack:
+    :param save_adv_sample:
     :return:
     """
     logger = logger_utilities.get_logger()
@@ -33,7 +34,8 @@ def eval_adversarial_dataset(model, dataloader, attack):
 
         t0 = time.time()
         data, labels = TorchUtils.to_device(data), TorchUtils.to_device(labels)
-        adversarials_batch = attack.create_adversarial_sample(data, labels, get_adversarial_class=True)
+        adversarials_batch = attack.create_adversarial_sample(data, labels, get_adversarial_class=True,
+                                                              save_adv_sample=save_adv_sample)
         t1 = time.time()
         adv_batch_l.append(adversarials_batch)
         logger.info("eval_model iter_num: {} ,process time: {} ".format(iter_num, t1 - t0))

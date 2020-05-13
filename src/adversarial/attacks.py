@@ -7,7 +7,7 @@ from typing import Union, List
 
 
 class Adversarials(object):
-    def __init__(self, attack_params: dict, original_sample: Union[torch.Tensor, None], true_label: torch.Tensor, probability: torch.Tensor, loss: torch.Tensor,
+    def __init__(self, attack_params: Union[dict, None], original_sample: Union[torch.Tensor, None], true_label: torch.Tensor, probability: torch.Tensor, loss: torch.Tensor,
                   adversarial_sample: Union[torch.Tensor, None] = None, genie_prob: Union[torch.Tensor, None] = None):
         """
 
@@ -94,10 +94,11 @@ class Natural(Attack):
         self.model = model
 
     def create_adversarial_sample(self, x: torch.Tensor, y: torch.Tensor, y_target: torch.Tensor = None,
-                                  get_adversarial_class: bool = False):
+                                  get_adversarial_class: bool = False, save_adv_sample: bool = False):
         loss, prob, genie_prob = self.model.eval_batch(x, y, self.model.pnml_model)
         if get_adversarial_class:
-            return Adversarials(None, None, y, prob, loss, x, genie_prob)
+            adv_sample = x if save_adv_sample else None
+            return Adversarials(None, None, y, prob, loss, adv_sample, genie_prob)
         else:
             return x
 
@@ -178,14 +179,16 @@ class PGD(Attack):
                                   x: torch.Tensor,
                                   y: torch.Tensor,
                                   y_target: torch.Tensor = None,
-                                  get_adversarial_class: bool = False) -> Union[torch.Tensor, Adversarials]:
+                                  get_adversarial_class: bool = False,
+                                  save_adv_sample: bool = True) -> Union[torch.Tensor, Adversarials]:
         adv_sample, adv_loss, adv_pred, genie_pred = iterated_fgsm(
                 self.model, x, y, self.loss_fn, self.attack_params["pgd_iter"],self.attack_params["pgd_step"],
                 self.attack_params["epsilon"], self.attack_params["norm"], y_target=y_target, random=self.attack_params["random"],
                 clamp=self.attack_params["clamp"], restart_num=self.attack_params["pgd_test_restart_num"],
                 beta=self.attack_params["beta"], flip_grad_ratio=self.attack_params["flip_grad_ratio"])
         if get_adversarial_class:
-            adversarials = Adversarials(self.attack_params, x, y, adv_pred, adv_loss, adv_sample, genie_pred)
+            adv_sample = adv_sample if save_adv_sample else None
+            adversarials = Adversarials(self.attack_params, None, y, adv_pred, adv_loss, adv_sample, genie_pred)
             return adversarials
         else:
             return adv_sample
