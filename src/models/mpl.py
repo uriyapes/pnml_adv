@@ -2,7 +2,7 @@ import torch.nn as nn
 from torch.nn import functional as F
 import torch.autograd
 from .model_utils import ModelTemplate
-from adversarial.attacks import get_attack
+from adversarial.attacks import get_refiner
 from utilities import TorchUtils
 
 
@@ -52,7 +52,7 @@ class PnmlModel(ModelTemplate):
         self.clamp = clamp
         self.base_model = base_model
         self.pnml_model_keep_grad = pnml_model_keep_grad
-        self.refine = get_attack(params, self.base_model, self.clamp, num_class=num_classes)
+        self.refine = get_refiner(params, self.base_model, self.clamp, num_class=num_classes)
         # self.refine = get_attack("pgd", self.base_model, self.gamma, params["pgd_iter"], params["pgd_step"], False,
         #                          self.clamp, 1)
         self.loss_fn = torch.nn.CrossEntropyLoss(reduction='sum')  # reduction='none' The loss is config with reduction='none' so the grad of each sample won't be effected by other samples
@@ -78,7 +78,7 @@ class PnmlModel(ModelTemplate):
     def forward(self, x):
         batch_size = x.shape[0]
         genie_prob = torch.zeros([batch_size, self.num_classes], requires_grad=True).to(x.device)
-        x_refined = self.refine.create_adversarial_sample(x, None)  #TODO: if pnml_model_keep_grad=False, detach the refined samples inside the create_adversarial_sample method
+        x_refined = self.refine.create_refined_samples(x)  #TODO: if pnml_model_keep_grad=False, detach the refined samples inside the create_adversarial_sample method
         x_refined_flat = torch.flatten(x_refined, start_dim=0, end_dim=1)
         with torch.set_grad_enabled(self.pnml_model_keep_grad):
             prob_x_refine = F.softmax(self.forward_base_model(x_refined_flat), dim=1)

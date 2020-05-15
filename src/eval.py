@@ -14,7 +14,7 @@ from train_utilities import TrainClass
 import json
 
 
-def eval_adversarial_dataset(model, dataloader, attack, save_adv_sample: bool =False):
+def eval_adversarial_dataset(model, dataloader, attack, save_adv_sample: bool = False):
     """
     Evaluate model performance on dataloader with attack
     :param model:
@@ -48,15 +48,6 @@ def eval_adversarial_dataset(model, dataloader, attack, save_adv_sample: bool =F
 
     adversarials = adv_batch_l[0].cat(adv_batch_l)
     return adversarials
-
-
-
-def generate_adv_dataset(model, dataloader, attack):
-    pass
-
-
-def eval_black_box(model_to_eval, model_to_attack, dataloader, attack):
-    pass
 
 
 def main():
@@ -98,7 +89,6 @@ def main():
 
     # Get adversarial attack:
     attack = exp.get_attack_for_model(model_to_eval)
-
 
     with open(os.path.join(logger.output_folder, 'params.json'), 'w', encoding='utf8') as outfile:
         outfile.write(json.dumps(exp.params, indent=4, sort_keys=False))

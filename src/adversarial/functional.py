@@ -59,14 +59,13 @@ def fgsm(model: Module,
     # x_adv.requires_grad = False
     return x_adv
 
+
 def fgsm_all_labels(model: Module,
          x: torch.Tensor,
-         y: torch.Tensor,
          loss_fn: Callable,
          eps: float,
-         y_target = None,
          clamp: Tuple[float, float] = (0, 1),
-         class_num = 100) -> torch.Tensor:
+         class_num: int = 100) -> torch.Tensor:
     """Creates an adversarial sample using the Fast Gradient-Sign Method (FGSM)
 
     This is a white-box attack.
@@ -74,10 +73,10 @@ def fgsm_all_labels(model: Module,
     Args:
         model: Model
         x: Batch of samples
-        y: Corresponding labels
         loss_fn: Loss function to maximise
         eps: Size of adversarial perturbation
         clamp: Max and minimum values of elements in the samples i.e. (0, 1) for MNIST
+        class_num:
 
     Returns:
         x_adv: Adversarially perturbed version of x
@@ -97,7 +96,6 @@ def fgsm_all_labels(model: Module,
     if x_fgsm.requires_grad is False:
         x_fgsm.requires_grad = True
 
-    targeted = y_target is not None
     prediction = model(x_fgsm)
     pred_mat = prediction.unsqueeze(dim=2).repeat(1, 1, class_num)
     # loss = loss_fn(pred_mat, labels_mat).mean(dim=0)
