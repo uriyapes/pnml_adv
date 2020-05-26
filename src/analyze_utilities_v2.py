@@ -102,6 +102,19 @@ def load_exp_result_from_dir(root_dir: str, indices: Union[list, None]):
     return adv, params
 
 
+def compress_and_save_adv(subdir_list: list):
+    """
+    Save compressed adversarial object, without image data.
+    :param subdir_list: a list of subdirectories for which the function will save a compressed version of adversarials.t
+    """
+    for i, subdir in enumerate(subdir_list):
+        adv, params = load_exp_result_from_dir(subdir, None)
+        if adv.original_sample is not None or adv.adversarial_sample is not None:
+            adv.original_sample = None
+            adv.adversarial_sample = None
+            adv.dump(subdir, "adversarials_compress.t")
+
+
 def results_dirs_to_df(subdir_list: list, indices: Union[list, None] = None) -> pd.DataFrame:
     """
     Load multiple experiments that are stored in subdir_list and save them into a DF.

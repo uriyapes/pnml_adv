@@ -61,14 +61,14 @@ class Adversarials(object):
             adv_l[0].regret = torch.cat([adv.regret for adv in adv_l])
         return adv_l[0]
 
-    def dump(self, path_to_folder):
-        torch.save(self, os.path.join(path_to_folder, "adversarials.t"))
+    def dump(self, path_to_folder: str, file_name: str = "adversarials.t"):
+        torch.save(self, os.path.join(path_to_folder, file_name))
 
     def get_mean_loss(self):
         return self.loss.sum().item() / len(self.loss)
 
     def get_accuracy(self):
-        return self.correct.sum().item() / len(self.correct)
+        return float(self.correct.sum().item()) / len(self.correct)
 
 
 class Attack(ABC):
@@ -90,6 +90,7 @@ class NoAttack(Attack):
 class Natural(Attack):
     def __init__(self, model):
         super(Natural, self).__init__()
+        assert(model)
         self.name = self.__class__.__name__
         self.model = model
 
@@ -157,6 +158,8 @@ class PGD(Attack):
         self.model = model
         self.loss_fn = loss_fn  # TODO: not used currently
         self.attack_params = attack_params.copy()
+        if self.attack_params.get("beta") is None:
+            self.attack_params["beta"] = 0.0
         if attack_params["pgd_test_restart_num"] == 0:
             self.attack_params["random"] = False
             self.attack_params["pgd_test_restart_num"] = 1

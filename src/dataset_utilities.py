@@ -43,6 +43,8 @@ def get_dataset_min_max_val(dataset_name: str, dtype=None):
         return _calc_normalized_val(0, mean_mnist, mnist_std, dtype), _calc_normalized_val(1, mean_mnist, mnist_std, dtype)
     elif dataset_name == 'imagenet_adversarial':
         return imagenet_min_val, imagenet_max_val
+    elif dataset_name == 'synthetic':
+        return -5.0, 5.0
     else:
         raise NameError("No experiment name:" + dataset_name)
 
@@ -192,8 +194,76 @@ def generate_noise_sample():
     return random_sample_data, random_sample_label
 
 
+def create_synthetic_dataloader(samples: int = 200, shuffle: bool = True):
+    mean1 = [0, 0]
+    cov1 = [[0.01, 0], [0, 0.01]]
+    x0 = np.random.multivariate_normal(mean1, cov1, int(samples))
+    y0 = np.zeros(samples)
+    # plt.plot(x1[:, 0], x1[:, 1], 'bx')
+    # plt.axis('equal')
+
+    ring_rad = 2
+    deg = np.linspace(0, 2*np.pi, samples)
+    ring_x, ring_y = ring_rad*np.cos(deg), ring_rad*np.sin(deg)
+
+    ring_offset = np.stack([ring_x, ring_y], axis=1)
+    ratio = 1
+    mean2 = [0, 0]
+    cov2 = [[0.01, 0], [0, 0.01]]
+    x1_1 = np.random.multivariate_normal(mean2, cov2, samples) + ring_offset
+    # plt.plot(x2[:, 0], x2[:, 1], 'ro')
+
+    # mean3 = [-7, 3]
+    # cov3 = [[0.5, 0], [0, 0.3]]
+    # x1_2 = np.random.multivariate_normal(mean3, cov3, int((samples - len(x1_1))/2))
+    #
+    # mean4 = [2, 5]
+    # cov4 = [[2, 0], [0, 0.3]]
+    # x1_3 = np.random.multivariate_normal(mean4, cov4, (samples - len(x1_1) - len(x1_2)))
+
+
+    y1 = np.ones(samples)
+    # plt.plot(x3[:, 0], x3[:, 1], 'ro')
+    inputs = torch.Tensor(np.concatenate([x0, x1_1], axis=0))
+    labels = torch.Tensor(np.concatenate([y0, y1], axis=0)).type(torch.long)
+    return create_tensor_dataloader(inputs, labels, batch_size=100, num_workers=2,
+                                    start_idx=0, end_idx=2*samples-1, idx_step_size=1, labels_to_test=2, shuffle=shuffle)
+
+
+def create_synthetic_dataloader2(samples: int = 1000):
+    mean1 = [-2, 0]
+    cov1 = [[1, 0], [0, 3.0]]
+    x0 = np.random.multivariate_normal(mean1, cov1, int(samples))
+    y0 = np.zeros(samples)
+    # plt.plot(x1[:, 0], x1[:, 1], 'bx')
+    # plt.axis('equal')
+
+    ratio = 0.4
+    mean2 = [2, 0]
+    cov2 = [[1, 0], [0, 0.1]]
+    x1_1 = np.random.multivariate_normal(mean2, cov2, int(ratio * samples))
+    # plt.plot(x2[:, 0], x2[:, 1], 'ro')
+
+    mean3 = [-7, 3]
+    cov3 = [[0.5, 0], [0, 0.3]]
+    x1_2 = np.random.multivariate_normal(mean3, cov3, int((samples - len(x1_1))/2))
+
+    mean4 = [2, 5]
+    cov4 = [[2, 0], [0, 0.3]]
+    x1_3 = np.random.multivariate_normal(mean4, cov4, (samples - len(x1_1) - len(x1_2)))
+
+
+    y1 = np.ones(samples)
+    # plt.plot(x3[:, 0], x3[:, 1], 'ro')
+    inputs = torch.Tensor(np.concatenate([x0, x1_1, x1_2, x1_3], axis=0))
+    labels = torch.Tensor(np.concatenate([y0, y1], axis=0)).type(torch.long)
+    return create_tensor_dataloader(inputs, labels, batch_size=100, num_workers=2,
+                                    start_idx=0, end_idx=2*samples-1, idx_step_size=1, labels_to_test=2, shuffle=True)
+
+
 def create_tensor_dataloader(input: torch.Tensor, labels: torch.Tensor, batch_size: int = 128, num_workers: int = 4,
-                             start_idx: int = 0, end_idx: int = 49, idx_step_size: Union[int, None] = 1, labels_to_test: Union[int, None] = 10):
+                             start_idx: int = 0, end_idx: int = 49, idx_step_size: Union[int, None] = 1,
+                             labels_to_test: Union[int, None] = 10, shuffle: bool = False):
     if labels_to_test is None:
         labels_to_test = 10
     if idx_step_size is None:
@@ -203,7 +273,7 @@ def create_tensor_dataloader(input: torch.Tensor, labels: torch.Tensor, batch_si
     testset = data.Subset(testset, indices=indices)
     testloader = data.DataLoader(testset,
                                  batch_size=batch_size,
-                                 shuffle=False,
+                                 shuffle=shuffle,
                                  num_workers=num_workers,
                                  pin_memory=True)
     classes = [str(i) for i in range(labels_to_test)]

@@ -6,11 +6,11 @@ import time
 import logger_utilities
 from experimnet_utilities import Experiment
 from utilities import TorchUtils
+from adversarial.attacks import get_attack
 TorchUtils.set_rnd_seed(1)
 # Uncomment for performance. Comment for debug and reproducibility
 torch.backends.cudnn.benchmark = True
 torch.backends.cudnn.deterministic = False
-from train_utilities import TrainClass
 import json
 
 
@@ -24,9 +24,7 @@ def eval_adversarial_dataset(model, dataloader, attack, save_adv_sample: bool = 
     :return:
     """
     logger = logger_utilities.get_logger()
-    model.eval()
-    loss = 0
-    correct = 0
+    model.eval()  # TODO: model isn't required because model.eval() is done inside attack (make sure before removing)
     adversarials = None
     logger.info("Starting eval...")
     adv_batch_l = []
@@ -50,11 +48,32 @@ def eval_adversarial_dataset(model, dataloader, attack, save_adv_sample: bool = 
     return adversarials
 
 
+def eval_pnml_blackbox(pnml_model, adv, exp: Experiment):
+
+    dataloader = exp.get_blackbox_dataloader(adv)
+    return eval_adversarial_dataset(pnml_model, dataloader['test'],  get_attack({'attack_type': 'natural'}, pnml_model), False)
+
+
+def eval_all(base_model, dataloader, attack, exp: Experiment):
+    adv = eval_adversarial_dataset(base_model, dataloader, attack, True)
+
+    assert(base_model.pnml_model is False)
+    pnml_model = exp.get_pnml_model(base_model, pnml_model_keep_grad=False)
+    adv_pnml = eval_pnml_blackbox(pnml_model, adv, exp)
+
+    natural = eval_adversarial_dataset(base_model, dataloader, get_attack({'attack_type': 'natural'}, base_model), False)
+    natural_pnml = eval_adversarial_dataset(pnml_model, dataloader, get_attack({'attack_type': 'natural'}, pnml_model), False)
+    return adv, adv_pnml, natural, natural_pnml
+
+
+
+
+
 def main():
     parser = jsonargparse.ArgumentParser(description='General arguments', default_meta=False)
     parser.add_argument('-t', '--general.experiment_type', default='imagenet_adversarial',
                         help='Type of experiment to execute', type=str)
-    parser.add_argument('-p', '--general.param_file_path', default=os.path.join('./src/parameters', 'eval_imagenet_param.json'),
+    parser.add_argument('-p', '--general.param_file_path', default=os.path.join('./src/parameters', 'eval_imagenet_params.json'),
                         help='param file path used to load the parameters file containing default values to all '
                              'parameters', type=str)
     # parser.add_argument('-p', '--general.param_file_path', default='src/tests/test_mnist_pgd_with_pnml_expected_result/params.json',
@@ -94,7 +113,7 @@ def main():
         outfile.write(json.dumps(exp.params, indent=4, sort_keys=False))
     logger.info(exp.params)
 
-    adv = eval_adversarial_dataset(model_to_eval, dataloaders['test'], attack)
+    adv = eval_adversarial_dataset(model_to_eval, dataloaders['test'], attack, True)
     loss = adv.get_mean_loss()
     acc = adv.get_accuracy()
     logger.info("Accuracy: {}, Loss: {}".format(acc, loss))

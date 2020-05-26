@@ -146,3 +146,34 @@ class Net_800_400_100(ModelTemplate):
         out = self.fc4(out)
         return out
 
+
+class NetSynthetic(ModelTemplate):
+    def __init__(self, input_size=2, hidden_size1=10, hidden_size2=10, hidden_size3=10, hidden_size4=10, num_classes=2):
+        super(NetSynthetic, self).__init__()
+        self.input_size = input_size
+        self.fc1 = nn.Linear(input_size, hidden_size1)
+        self.relu1 = nn.ReLU()
+        self.fc2 = nn.Linear(hidden_size1, hidden_size2)
+        self.relu2 = nn.ReLU()
+        self.fc3 = nn.Linear(hidden_size2, hidden_size3)
+        self.relu3 = nn.ReLU()
+        self.fc4 = nn.Linear(hidden_size3, hidden_size4)
+        self.relu4 = nn.ReLU()
+
+        self.fc5 = nn.Linear(hidden_size4, num_classes)
+
+    def forward(self, x):
+        out = self.fc1(x)
+        out = self.relu1(out)
+
+        out = self.fc2(out)
+        out = self.relu2(out)
+
+        out = self.fc3(out)
+        out = self.relu3(out)
+
+        out = self.fc4(out)
+        out = self.relu4(out)
+
+        out = self.fc5(out)
+        return out

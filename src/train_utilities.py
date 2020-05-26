@@ -3,7 +3,7 @@ import logging
 import sys
 import time
 from copy import deepcopy
-
+from typing import Union
 import numpy as np
 import torch
 import torch.nn.functional as F
@@ -20,8 +20,7 @@ class TrainClass:
     """
     criterion = nn.CrossEntropyLoss()
     def __init__(self, params_to_train, learning_rate: float, momentum: float, step_size: list, gamma: float,
-                 weight_decay: float, logger=None, adv_learn_alpha=0, adv_learn_eps=0.05, attack_type: str = 'pgd',
-                 pgd_iter: int = 30, pgd_step: float = 0.01, restart_num: int = 1, save_model_every_n_epoch = float('Inf')):
+                 weight_decay: float, logger=None, attack_params: Union[dict, None] = None, adv_learn_alpha=0, save_model_every_n_epoch = float('Inf')):
         """
         Initialize train class object.
         :param params_to_train: the parameters of pytorch Module that will be trained.
@@ -32,7 +31,6 @@ class TrainClass:
         :param weight_decay: L2 regularization.
         :param logger: logger class in order to print logs and save results.
         :param adv_learn_alpha: The weight that should be given to the adversarial learning regulaizer (0 means none).
-        :param attack_type: options: fgsm, pgd and none
         """
 
         self.logger = logger if logger is not None else logging.StreamHandler(sys.stdout)
@@ -52,14 +50,10 @@ class TrainClass:
                                                         gamma=gamma)
         self.freeze_batch_norm = False
         self.adv_learn_alpha = adv_learn_alpha
-        self.adv_learn_eps = adv_learn_eps
-        self.attack_type = attack_type
-        self.pgd_iter = pgd_iter
-        self.pgd_step = pgd_step
-        self.restart_num = restart_num
+        self.attack_params = attack_params if attack_params is not None else {"attack_type": "no_attack"}
 
-    def train_model(self, model, dataloaders, num_epochs: int = 10, acc_goal=None, eval_test_every_n_epoch: int = 1,
-                    sample_test_data=None, sample_test_true_label=None):
+    def train_model(self, model, dataloaders, num_epochs: int = 10, acc_goal = None, eval_test_every_n_epoch: int = 1,
+                    sample_test_data = None, sample_test_true_label = None):
         """
         Train DNN model using some trainset.
         :param model: the model which will be trained.
@@ -71,12 +65,10 @@ class TrainClass:
         """
         self.logger.info("Use device:" + TorchUtils.get_device())
         model = TorchUtils.to_device(model)
-        assert(0)  #  TODO: fix get_attack
-        attack = get_attack(self.attack_type, model, self.adv_learn_eps, self.pgd_iter, self.pgd_step,
-                            self.restart_num, get_dataset_min_max_val(dataloaders['dataset_name']))
+        attack = get_attack(self.attack_params, model, get_dataset_min_max_val(dataloaders['dataset_name']))
 
         # If testset is already adversarial then do nothing else use the same attack to generate adversarial testset
-        testset_attack = get_attack("no_attack") if dataloaders['adv_test_flag'] else attack  # TODO: replace training attack with testing attack
+        testset_attack = get_attack({"attack_type":"no_attack"}) if dataloaders['adv_test_flag'] else attack  # TODO: replace training attack with testing attack
         epoch_time = 0
 
         # Loop on epochs
@@ -108,8 +100,8 @@ class TrainClass:
                 break
 
         test_loss, test_acc = self.eval_model(model, dataloaders['test'], testset_attack)
-        train_loss_output = float(total_loss_in_epoch.cpu().detach().numpy().round(16))
-        test_loss_output = float(test_loss.cpu().detach().numpy().round(16))
+        train_loss_output = float(total_loss_in_epoch)
+        test_loss_output = float(test_loss)
         # Print and save
         self.logger.info('----- [train test] loss =[%f %f], natural_train_loss=[%f], acc=[%f %f] epoch_time=%.2f' %
                          (total_loss_in_epoch, test_loss, natural_train_loss, train_acc, test_acc,

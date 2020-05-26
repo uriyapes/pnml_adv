@@ -15,7 +15,8 @@
         "pgd_test_restart_num": 10,
         "beta": 0.0,
         "test_start_idx": 0,
-        "test_end_idx": 1
+        "test_end_idx": 4999,
+        "idx_step_size": 1
     },
     "model": {
         "_comment": "===== IMAGE-NET ADV. MODEL =====",

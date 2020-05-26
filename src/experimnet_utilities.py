@@ -1,13 +1,13 @@
 import torch
 import json
 from typing import Union
-from dataset_utilities import create_mnist_train_dataloader, create_adv_mnist_test_dataloader_preprocessed
+from dataset_utilities import create_mnist_train_dataloader, create_adv_mnist_test_dataloader_preprocessed, create_synthetic_dataloader
 from dataset_utilities import create_imagenet_test_loader
 from dataset_utilities import create_adversarial_cifar10_dataloaders
 from dataset_utilities import create_mnist_dataloaders
 from dataset_utilities import create_tensor_dataloader
 # from dataset_utilities import create_svhn_dataloaders
-from models.mpl import Net, Net_800_400_100, MNISTClassifier, PnmlModel
+from models.mpl import Net, Net_800_400_100, MNISTClassifier, PnmlModel, NetSynthetic
 from models.wide_resnet_original import WideResNet
 from models.madry_wide_resnet import MadryWideResNet
 from models.model_utils import load_pretrained_imagenet_model, load_pretrained_model, ImagenetModel
@@ -25,7 +25,7 @@ class Experiment:
         """
         if args['experiment_type'] not in [
                             'out_of_dist_svhn',
-                            'out_of_dist_noise',
+                            'synthetic',
                             'pnml_mnist',
                             'imagenet_adversarial',
                             'cifar_adversarial',
@@ -33,7 +33,7 @@ class Experiment:
             raise NameError('No experiment type: %s' % type)
         self.exp_type = args['experiment_type']
         self.params = self.__load_params_from_file(args, self.exp_type)
-        if self.exp_type != "imagenet_adversarial":
+        if self.params.get("num_classes") is None:
             self.params["num_classes"] = 10
         if cli_params is None:
             cli_params = dict()
@@ -71,17 +71,22 @@ class Experiment:
         if self.params['adv_attack_test']["white_box"]:
             return self.get_adv_dataloaders(datafolder='./data', p=None, model=None)
         else:
-            return self.get_blackbox_dataloader()
+            adv = torch.load(self.params['adv_attack_test']["black_box_adv_path"])
+            return self.get_blackbox_dataloader(adv, self.params["batch_size"], self.params["num_workers"],
+                                                self.params["adv_attack_test"]['test_start_idx'],
+                                                self.params["adv_attack_test"]['test_end_idx'],
+                                                self.params["adv_attack_test"]['idx_step_size'], self.params.get('num_classes'))
 
-    def get_blackbox_dataloader(self):
-        p = self.params['adv_attack_test']
-        assert(p["white_box"] is False)
-        adv = torch.load(p["black_box_adv_path"])
+
+    def get_blackbox_dataloader(self, adv, batch_size=128, num_workers: int = 4, start_idx: int = 0,
+                                end_idx: Union[int, None] = None, idx_step_size: int = 1, labels_to_test: int = 10):
+        if end_idx is None:
+            end_idx = len(adv.adversarial_sample)-1
         dataloader = dict()
         dataloader['test'], dataloader['classes'] = create_tensor_dataloader(adv.adversarial_sample, adv.true_label,
-                                                             batch_size=self.params["batch_size"], num_workers=self.params["num_workers"],
-                                                             start_idx=p["test_start_idx"], end_idx=p["test_end_idx"],
-                                                             idx_step_size=p.get('idx_step_size'), labels_to_test=p.get('num_classes'))
+                                                             batch_size=batch_size, num_workers=num_workers,
+                                                             start_idx=start_idx, end_idx=end_idx,
+                                                             idx_step_size=idx_step_size, labels_to_test=labels_to_test)
         dataloader['dataset_name'] = self.exp_type
         dataloader["black_box_attack_params"] = adv.attack_params
         return dataloader
@@ -121,6 +126,10 @@ class Experiment:
         #                    'test': testloader_svhn,
         #                    'classes': classes_cifar10,
         #                    'classes_svhn': classes_svhn}
+        elif self.exp_type == 'synthetic':
+            trainloader, classes = create_synthetic_dataloader(shuffle=True)
+            testloader, _ = create_synthetic_dataloader(shuffle=False)
+            dataloaders = {'train': trainloader, 'test': testloader, 'classes': classes, 'adv_test_flag': False}
         elif self.exp_type == 'imagenet_adversarial':
             assert (attack is not None)
             testloader, classes, bounds = create_imagenet_test_loader(data_folder,
@@ -193,15 +202,21 @@ class Experiment:
         elif self.exp_type == "imagenet_adversarial":
             if model_arch == 'resnet50':
                 model = load_pretrained_imagenet_model("resnet50")
+        elif self.exp_type == "synthetic":
+            model = NetSynthetic()
         else:
             raise NameError('No experiment type: %s' % self.exp_type)
 
         model = load_pretrained_model(model, ckpt_path) if ckpt_path is not None else model
         model = ImagenetModel(model, self.params["num_classes"]) if self.exp_type == "imagenet_adversarial" else model
         if pnml_model_flag:
-            model = PnmlModel(model, self.params['fit_to_sample'], get_dataset_min_max_val(self.exp_type), self.params["num_classes"], pnml_model_keep_grad)
+            model = self.get_pnml_model(model, pnml_model_keep_grad)
         model.ckpt_path = ckpt_path
         return model
+
+    def get_pnml_model(self, base_model,  pnml_model_keep_grad: bool = True):
+        return PnmlModel(base_model, self.params['fit_to_sample'], get_dataset_min_max_val(self.exp_type),
+                         self.params["num_classes"], pnml_model_keep_grad)
 
     def get_exp_name(self):
         if self.exp_type == 'out_of_dist_svhn':
@@ -216,6 +231,8 @@ class Experiment:
             name = 'cifar_adversarial'
         elif self.exp_type == 'mnist_adversarial':
             name = 'mnist_adversarial'
+        elif self.exp_type == 'synthetic':
+            name = 'synthetic'
         else:
             raise NameError('No experiment type: %s' % self.exp_type)
 
