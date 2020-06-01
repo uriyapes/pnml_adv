@@ -66,9 +66,6 @@ def eval_all(base_model, dataloader, attack, exp: Experiment):
     return adv, adv_pnml, natural, natural_pnml
 
 
-
-
-
 def main():
     parser = jsonargparse.ArgumentParser(description='General arguments', default_meta=False)
     parser.add_argument('-t', '--general.experiment_type', default='imagenet_adversarial',
@@ -112,6 +109,14 @@ def main():
     with open(os.path.join(logger.output_folder, 'params.json'), 'w', encoding='utf8') as outfile:
         outfile.write(json.dumps(exp.params, indent=4, sort_keys=False))
     logger.info(exp.params)
+
+
+    # adv, adv_pnml, natural, natural_pnml = eval_all(model_to_eval, dataloaders['test'], attack, exp)
+    # logger.info("Base model adversarial - Accuracy: {}, Loss: {}".format(adv.get_accuracy(), adv.get_mean_loss()))
+    # logger.info("Pnml model adversarial - Accuracy: {}, Loss: {}".format(adv_pnml.get_accuracy(), adv_pnml.get_mean_loss()))
+    # logger.info("Base model natural - Accuracy: {}, Loss: {}".format(natural.get_accuracy(), natural.get_mean_loss()))
+    # logger.info("Pnml model natural - Accuracy: {}, Loss: {}".format(natural_pnml.get_accuracy(), natural_pnml.get_mean_loss()))
+
 
     adv = eval_adversarial_dataset(model_to_eval, dataloaders['test'], attack, True)
     loss = adv.get_mean_loss()

@@ -65,9 +65,10 @@ def is_dicts_equal(d1: dict, d2: dict, ignore_keys: Union[None, list] = None):
 
 def load_dir_params(path: str):
     param_path = pathlib.Path(path) / 'params.json'
+    if param_path.exists() is False:
+        param_path = '..' / pathlib.Path(path) / 'params.json'
     param_path_l = glob.glob(str(param_path), recursive=False)
-    print("param_path: {} param_path_l: {}".format(param_path, param_path_l))
-    assert len(param_path_l) == 1, "param_path: {} param_path_l: {}".format(param_path, param_path_l)
+    assert len(param_path_l) == 1, "for param_path: {} found the following param files: {}".format(param_path, param_path_l)
     with open(param_path_l[0]) as f:
         params = json.load(f)
 
@@ -93,7 +94,11 @@ def load_exp_result_from_dir(root_dir: str, indices: Union[list, None]):
     else:
         if len(subdir_list) == 1:
             root_dir = subdir_list[0]
-        adv = torch.load(os.path.join(root_dir, 'adversarials.t'))
+        try:
+            adv = torch.load(os.path.join(root_dir, 'adversarials.t'))
+        except FileNotFoundError:
+            adv = torch.load(os.path.join(root_dir, 'adversarials_compress.t'))
+
         params = load_dir_params(root_dir)
 
     if indices is not None:
@@ -110,6 +115,7 @@ def compress_and_save_adv(subdir_list: list):
     for i, subdir in enumerate(subdir_list):
         adv, params = load_exp_result_from_dir(subdir, None)
         if adv.original_sample is not None or adv.adversarial_sample is not None:
+            print("Compress adversarial.t in directory: {}".format(subdir))
             adv.original_sample = None
             adv.adversarial_sample = None
             adv.dump(subdir, "adversarials_compress.t")
@@ -123,7 +129,7 @@ def results_dirs_to_df(subdir_list: list, indices: Union[list, None] = None) -> 
     :return: A dataframe containing the results.
     """
     assert(len(subdir_list) >= 1)
-    statistics_df = pd.DataFrame(columns=['acc', 'epsilon', 'mean loss', 'std loss', 'mean entropy'])
+    statistics_df = pd.DataFrame(columns=['acc', 'epsilon', 'mean loss', 'samples'])
     for i, subdir in enumerate(subdir_list):
         # params = load_dir_params(subdir)
         # if params["adv_attack_test"]["white_box"] is False:
@@ -134,13 +140,25 @@ def results_dirs_to_df(subdir_list: list, indices: Union[list, None] = None) -> 
         adv, params = load_exp_result_from_dir(subdir, indices)
         statistics_df.loc[i, "acc"] = adv.get_accuracy()
         statistics_df.loc[i, "mean loss"] = adv.get_mean_loss()
-        statistics_df.loc[i, "epsilon"] = params["adv_attack_test"]["epsilon"]
+        statistics_df.loc[i, "mean size"] = adv.get_mean_loss()
+        statistics_df.loc[i, "samples"] = len(adv.correct)
+        if params["adv_attack_test"]['attack_type'] == 'natural':
+            statistics_df.loc[i, "epsilon"] = 0
+            statistics_df.loc[i, "iter"] = 0
+            statistics_df.loc[i, "pgd_step"] = 0
+            statistics_df.loc[i, "restarts"] = 0
+        else:
+            statistics_df.loc[i, "epsilon"] = params["adv_attack_test"]["epsilon"]
+            statistics_df.loc[i, "iter"] = params["adv_attack_test"]["pgd_iter"]
+            statistics_df.loc[i, "pgd_step"] = params["adv_attack_test"]["pgd_step"]
+            statistics_df.loc[i, "restarts"] = params["adv_attack_test"]["pgd_test_restart_num"]
         statistics_df.loc[i, "lambda"] = params["fit_to_sample"]["epsilon"]
 
     return statistics_df
 
 
 if __name__ == "__main__":
+    print("start")
     # All tests were performed on the imagenet evaluation subset which includes all the samples for the first 100 classes (50 samples per each class for a total of 5000 samples).
     #
     # Experiments:
