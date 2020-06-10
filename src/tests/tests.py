@@ -36,13 +36,16 @@ class TestModel(unittest.TestCase):
         self.logger.info("Accuracy: {}, Loss: {}".format(adv.get_accuracy(), adv.get_mean_loss()))
         # self.assertEqual(adv.attack_params, adv_expected.attack_params)
         self.assertTrue(torch.equal(adv.adversarial_sample, adv.adversarial_sample))
-        self.assertTrue(torch.equal(adv.predict, adv_expected.predict))
         self.assertTrue(torch.equal(adv.correct, adv_expected.correct))
-        self.assertTrue(torch.equal(adv.loss, adv_expected.loss))
+        self.assertTrue(torch.equal(adv.predict, adv_expected.predict))
+
+        self.assertTrue(torch.allclose(adv.loss, adv_expected.loss))  # There is some limitations on floating-point accuracy (I saw slightly different results for different batch sizes)
+        # self.assertTrue(torch.equal(adv.loss, adv_expected.loss))
 
         if adv.genie_prob is not None:
-            self.assertTrue(torch.equal(adv.genie_prob, adv_expected.genie_prob))
-            self.assertTrue(torch.equal(adv.regret, adv_expected.regret))
+            self.assertTrue(torch.allclose(adv.genie_prob, adv_expected.genie_prob))
+            # self.assertTrue(torch.equal(adv.genie_prob, adv_expected.genie_prob))
+            self.assertTrue(torch.allclose(adv.regret, adv_expected.regret))
 
     def _prepare_test(self):
         self.general_args['param_file_path'] = os.path.join(self.expected_result_folder, 'params.json')

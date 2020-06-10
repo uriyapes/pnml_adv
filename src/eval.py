@@ -9,6 +9,7 @@ from utilities import TorchUtils
 from adversarial.attacks import get_attack
 TorchUtils.set_rnd_seed(1)
 # Uncomment for performance. Comment for debug and reproducibility
+# torch.backends.cudnn.enable = True
 torch.backends.cudnn.benchmark = True
 torch.backends.cudnn.deterministic = False
 import json
@@ -23,10 +24,16 @@ def eval_adversarial_dataset(model, dataloader, attack, save_adv_sample: bool = 
     :param save_adv_sample:
     :return:
     """
+    try:
+        torch.cuda.reset_max_memory_allocated()
+    except:
+        pass
     logger = logger_utilities.get_logger()
     model.eval()  # TODO: model isn't required because model.eval() is done inside attack (make sure before removing)
     adversarials = None
     logger.info("Starting eval...")
+    if save_adv_sample:
+        logger.info("Save adversarial samples generated")
     adv_batch_l = []
     for iter_num, (data, labels) in enumerate(dataloader):
 
@@ -45,6 +52,10 @@ def eval_adversarial_dataset(model, dataloader, attack, save_adv_sample: bool = 
         # logger.info("eval_model iter_num: {} ,process time: {} save time: {} ".format(iter_num, t1-t0, t2-t1))
 
     adversarials = adv_batch_l[0].cat(adv_batch_l)
+    try:
+        logger.info("Max GPU memory allocated during eval_adversarial_dataset: {} MB".format(torch.cuda.max_memory_allocated() / 2**20))
+    except:
+        pass
     return adversarials
 
 
@@ -68,11 +79,13 @@ def eval_all(base_model, dataloader, attack, exp: Experiment):
 
 def main():
     parser = jsonargparse.ArgumentParser(description='General arguments', default_meta=False)
-    parser.add_argument('-t', '--general.experiment_type', default='imagenet_adversarial',
+    parser.add_argument('-t', '--general.experiment_type', default='cifar_adversarial',
                         help='Type of experiment to execute', type=str)
-    parser.add_argument('-p', '--general.param_file_path', default=os.path.join('./src/parameters', 'eval_imagenet_params.json'),
+    parser.add_argument('-p', '--general.param_file_path', default=os.path.join('./src/parameters', 'cifar_params.json'),
                         help='param file path used to load the parameters file containing default values to all '
                              'parameters', type=str)
+    parser.add_argument('--general.save', default=False, action='store_true',
+                        help='Whether to save adversarial samples output', type=bool)
     # parser.add_argument('-p', '--general.param_file_path', default='src/tests/test_mnist_pgd_with_pnml_expected_result/params.json',
     #                     help='param file path used to load the parameters file containing default values to all '
     #                          'parameters', type=str)
@@ -118,7 +131,7 @@ def main():
     # logger.info("Pnml model natural - Accuracy: {}, Loss: {}".format(natural_pnml.get_accuracy(), natural_pnml.get_mean_loss()))
 
 
-    adv = eval_adversarial_dataset(model_to_eval, dataloaders['test'], attack, True)
+    adv = eval_adversarial_dataset(model_to_eval, dataloaders['test'], attack, general_args['save'])
     loss = adv.get_mean_loss()
     acc = adv.get_accuracy()
     logger.info("Accuracy: {}, Loss: {}".format(acc, loss))

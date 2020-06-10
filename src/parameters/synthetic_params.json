@@ -1,0 +1,56 @@
+{
+    "exp_type": "synthetic",
+    "batch_size": 30,
+    "num_workers": 4,
+    "freeze_layer": 0,
+    "num_classes": 2,
+    "initial_training": {
+        "_comment": "===== SYNTHETIC ADVERSARY TRAINING =====",
+        "do_initial_training": true,
+        "eval_test_every_n_epoch": 1,
+        "save_model_every_n_epoch": 9999,
+        "epochs": 5,
+        "lr": 0.1,
+        "momentum": 0.9,
+        "step_size": [10,30],
+        "gamma": 0.2,
+        "weight_decay": 0.0001,
+        "loss_goal": 0.0,
+        "adv_alpha": 1.0,
+        "adv_attack_train": {
+            "attack_type": "pgd",
+            "epsilon": 0.05,
+            "pgd_iter": 4,
+            "pgd_step": 0.025,
+            "pgd_test_restart_num": 0,
+            "beta": 0.0
+        }
+    },
+    "adv_attack_test": {
+        "_comment": "===== SYNTHETIC ADVERSARY TESTING =====",
+        "white_box": true,
+        "black_box_adv_path": "",
+        "attack_type": "pgd",
+        "epsilon": 0.095,
+        "pgd_iter": 4,
+        "pgd_step": 0.025,
+        "pgd_test_restart_num": 0,
+        "beta": 0.0,
+        "test_start_idx": 0,
+        "test_end_idx": 9999
+    },
+    "model": {
+        "_comment": "===== SYNTHETIC MODEL =====",
+        "model_arch": "NetSynthetic",
+        "ckpt_path": "./trained_models/synthetic_results_20200519_194104/synthetic_model_40_iter.pt",
+        "pnml_active": false
+    },
+    "fit_to_sample": {
+        "_comment": "===== SYNTHETIC PNML=====",
+        "attack_type": "pgd",
+        "epsilon": 0.06,
+        "pgd_iter": 1,
+        "pgd_step": 0.06,
+        "pgd_test_restart_num": 0
+    }
+}
