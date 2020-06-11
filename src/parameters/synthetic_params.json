@@ -6,7 +6,6 @@
     "num_classes": 2,
     "initial_training": {
         "_comment": "===== SYNTHETIC ADVERSARY TRAINING =====",
-        "do_initial_training": true,
         "eval_test_every_n_epoch": 1,
         "save_model_every_n_epoch": 9999,
         "epochs": 5,

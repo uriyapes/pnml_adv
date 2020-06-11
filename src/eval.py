@@ -98,6 +98,8 @@ def main():
     parser.add_argument('-ti', '--adv_attack_test.pgd_iter', help='the number of test pgd iterations', type=int)
     parser.add_argument('-b', '--adv_attack_test.beta', help='the beta value for regret reduction regularization ',
                                type=float)
+    parser.add_argument('--adv_attack_test.attack_type', help='The type of the attack',
+                               type=str)
     parser.add_argument('-r', '--fit_to_sample.epsilon', help='the epsilon strength of the refinement (lambda)', type=float)
     parser.add_argument('-i', '--fit_to_sample.pgd_iter', help='the number of PGD iterations of the refinement', type=int)
     parser.add_argument('-s', '--fit_to_sample.pgd_step', help='the step size of the refinement', type=float)
