@@ -1,0 +1,19 @@
+name: pnml_adv3
+channels:
+  - pytorch
+  - conda-forge
+dependencies:
+  - python
+  - pytorch=1.4.0
+  - torchvision=0.5.0
+  - cudatoolkit=10.0
+  - pillow
+  - numpy
+  - pandas
+  - scipy
+  - matplotlib
+  - notebook
+  - pip
+  - pyyaml>=3.13
+  - pip:
+    - jsonargparse

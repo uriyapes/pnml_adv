@@ -13,7 +13,8 @@ def fgsm(model: Module,
          loss_fn: Callable,
          eps: float,
          y_target = None,
-         clamp: Tuple[float, float] = (0, 1)) -> torch.Tensor:
+         clamp: Tuple[float, float] = (0, 1),
+         retain_graph=True) -> torch.Tensor:
     """Creates an adversarial sample using the Fast Gradient-Sign Method (FGSM)
 
     This is a white-box attack.
@@ -29,22 +30,82 @@ def fgsm(model: Module,
     Returns:
         x_adv: Adversarially perturbed version of x
     """
-    x = x.detach()
-    x.requires_grad = True
+    optimizer = torch.optim.SGD(model.parameters(), 0)
+    optimizer.zero_grad()
+    # x.grad = None
+    if x.grad is not None:
+        x.grad.detach_()
+        x.grad.zero_()
+    x_fgsm = x.clone().to(x.device)
+    x_fgsm.requires_grad_(True)
+    x_fgsm.retain_grad()  # backward don't calculate grad for non-leaf unless retain_grad() is invoked
     targeted = y_target is not None
-    prediction = model(x, y)
+    prediction = model(x_fgsm)
     loss = loss_fn(prediction, y_target if targeted else y)
-    loss.backward(retain_graph=True)
+    # loss.backward(retain_graph=retain_graph)
+    x_adv_grad = torch.autograd.grad(loss, x_fgsm, create_graph=False)[0]
+    # x_adv_grad = x_fgsm.grad
 
     # x_adv = (x + torch.sign(x.grad) * eps).clamp(*clamp).detach()
     # x_adv = (x + x.grad + torch.sign(x.grad) * eps).detach()
     # x_grad_sign = 1.0/100 * x.grad.sign()
-    x_grad_sign = x.grad *500
+    # x_grad_sign = x.grad *500
+
+    x_grad_sign = torch.sign(x_adv_grad).detach()
     if not targeted:
-        x_adv = (x + x_grad_sign * eps).detach()#.clamp(*clamp)
+        x_adv = (x + x_grad_sign * eps).clamp(*clamp)  #.detach()
     else:
-        x_adv = (x - x_grad_sign * eps).detach()#.clamp(*clamp)
-    x.requires_grad = False
+        x_adv = (x - x_grad_sign * eps).clamp(*clamp)  #.detach()
+    # x_adv.requires_grad = False
+    return x_adv
+
+
+def fgsm_all_labels(model: Module,
+         x: torch.Tensor,
+         loss_fn: Callable,
+         eps: float,
+         clamp: Tuple[float, float] = (0, 1),
+         class_num: int = 100) -> torch.Tensor:
+    """Creates an adversarial sample using the Fast Gradient-Sign Method (FGSM)
+
+    This is a white-box attack.
+
+    Args:
+        model: Model
+        x: Batch of samples
+        loss_fn: Loss function to maximise
+        eps: Size of adversarial perturbation
+        clamp: Max and minimum values of elements in the samples i.e. (0, 1) for MNIST
+        class_num:
+
+    Returns:
+        x_adv: Adversarially perturbed version of x
+    """
+    loss_fn = torch.nn.CrossEntropyLoss(reduction="none")
+    # optimizer = torch.optim.SGD(model.parameters(), 0)
+    # optimizer.zero_grad()
+    # # x.grad = None
+    # if x.grad is not None:
+    #     x.grad.detach_()
+    #     x.grad.zero_()
+    batch_size = x.shape[0]
+    labels_mat = torch.arange(0, class_num, dtype=torch.long, device=x.device).unsqueeze(dim=0).expand(batch_size, class_num)
+
+    x_fgsm = x.clone().to(x.device)
+    x_fgsm.retain_grad()  # backward don't calculate grad for non-leaf unless retain_grad() is invoked (in addition to requires_grad)
+    if x_fgsm.requires_grad is False:
+        x_fgsm.requires_grad = True
+
+    prediction = model(x_fgsm)
+    pred_mat = prediction.unsqueeze(dim=2).repeat(1, 1, class_num)
+    # loss = loss_fn(pred_mat, labels_mat).mean(dim=0)
+    # # loss.backward(retain_graph=retain_graph)
+    x_adv = torch.zeros_like(x_fgsm, device=x.device).unsqueeze(dim=0).repeat([class_num] + [1 for i in range(x_fgsm.dim())])
+    for i in range(class_num):
+        loss = loss_fn(pred_mat[:,:,i], labels_mat[:,i]).mean(dim=0)
+        x_adv_grad = torch.autograd.grad(loss, x_fgsm, create_graph=False, retain_graph=True)[0]
+        x_grad_sign = torch.sign(x_adv_grad).detach()
+        x_adv[i] = (x - x_grad_sign * eps).clamp(*clamp)  #.detach()
     return x_adv
 
 
@@ -60,7 +121,8 @@ def _iterative_gradient(model: Module,
                         y_target: torch.Tensor = None,
                         random: bool = False,
                         clamp: Tuple[float, float] = (0, 1),
-                        beta=0.0) -> Tuple[torch.Tensor, int]:
+                        beta=0.0,
+                        flip_grad_ratio: float = 0.0) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """Base function for PGD and iterated FGSM
 
     Args:
@@ -72,18 +134,23 @@ def _iterative_gradient(model: Module,
         step: Size of step to make at each iteration
         eps: Maximum size of adversarial perturbation, larger perturbations will be projected back into the
             L_norm ball
-        norm: Type of norm
-        step_norm: 'inf' for PGD, 2 for iterated PGD (MEK: corrected)
-        y_target:
+        norm: Type of norm (used for projection), 'inf' for infinity-norm, any integer number for other norm
+        step_norm: Type of norm per each step, 'inf' for infinity-norm, any integer number for other norm
+        y_target: If None use untargeted attack, else y_target contain a batch of labels for targeted attack
         random: Whether to start Iterated FGSM within a random point in the l_norm ball
         clamp: Max and minimum values of elements in the samples i.e. (0, 1) for MNIST
 
     Returns:
         x_adv: Adversarially perturbed version of x
+        adv_loss: The loss of the aversarial sample
+        prediction: The predictions for the adversarial sample
+        genie_prob: The probability of the genie (if exist, else None)
     """
+
+    loss_fn = torch.nn.NLLLoss(reduction='none')
     targeted = y_target is not None
     # x_adv = x.clone().detach().requires_grad_(True).to(x.device)
-    x_adv = x.clone().to(x.device)
+    x_adv = x.detach().clone().to(x.device)
     if random:
         # x_adv = random_perturbation(x_adv, norm, eps)
         rand_gen = torch.distributions.uniform.Uniform(x_adv - eps, x_adv + eps)  #Create a point around x_adv within a range of eps
@@ -92,18 +159,23 @@ def _iterative_gradient(model: Module,
     for i in range(k):
         # print("_iterative_gradient iter: {}".format(i))
         # Each new loop x_adv is a new variable (x_adv += gradients), therefore we must detach it (otherwise backward()
-        # will result in calculating the old clones gradients as well) and then requires_grad_(True) since detach()
+        # will result in calculating the old clones gradients as well and memory overflow) and then requires_grad_(True) since detach()
         # disabled the grad.
         # The other option (original) is to work with temp variable _x_adv (see below) but it seems to prelong the
         # calculation time maybe as a result of re-cloning
         # _x_adv = x_adv.clone().detach().requires_grad_(True)
-        x_adv = x_adv
-        x_adv.requires_grad_(True)
-        prediction = model(x_adv, y)
+        # x_adv_old = x_adv.detach().clone()
+        x_adv = x_adv.detach()
+        x_adv = x_adv.requires_grad_(True)
+        prediction = model.calc_log_prob(x_adv)
         loss = loss_fn(prediction, y_target if targeted else y).mean() - beta*model.regularization.mean()
         # loss.backward()
         # x_adv_grad = x_adv.grad
         x_adv_grad = torch.autograd.grad(loss, x_adv, create_graph=False)[0]
+        if flip_grad_ratio > 0.0:
+            bit_mask = torch.rand_like(x_adv_grad) < flip_grad_ratio
+            x_adv_grad[bit_mask] = x_adv_grad[bit_mask] * -1
+            # x_adv_grad[:, :, :, 0:int(x_adv_grad.shape[3]*flip_grad_ratio)] = x_adv_grad[:, :, :, 0:int(x_adv_grad.shape[3]*flip_grad_ratio)] * -1
         with torch.no_grad():
             if step_norm == 'inf':
                 gradients = (x_adv_grad.sign() * step).detach()
@@ -115,22 +187,32 @@ def _iterative_gradient(model: Module,
             if targeted:
                 # Targeted: Gradient descent on the loss of the (incorrect) target label
                 # w.r.t. the model parameters (increasing prob. to predict the incorrect label)
-                x_adv -= gradients
+                x_adv = x_adv - gradients
             else:
                 # Untargeted: Gradient ascent on the loss of the correct label w.r.t.
                 # the model parameters
-                x_adv += gradients
+                x_adv = x_adv + gradients
 
 
         # Project back into l_norm ball and correct range
-        x_adv = project(x, x_adv, norm, eps).clamp(*clamp)
-    x_adv = x_adv
+        x_adv = project(x, x_adv, norm, eps).clamp(*clamp).detach()
+    x_adv = x_adv.detach()
     # x_adv.requires_grad_(True) #  This is done so model with refinement could do backprop
-    prediction = model(x_adv, y)
-    adv_loss = loss_fn(prediction, y_target if targeted else y)
-    x_adv.requires_grad_ = False
 
-    return x_adv, adv_loss
+    loss, prob, genie_prob = model.eval_batch(x_adv, y_target if targeted else y, enable_grad=model.pnml_model)
+    # logits_or_prob = model(x_adv).detach()  # could be logits or probability
+    # if model.pnml_model:
+    #     prediction = logits_or_prob.detach()
+    #     log_prob = torch.log(logits_or_prob).detach()
+    #     genie_prob = model.get_genie_prob().detach()
+    # else:  # if Logits:
+    #     prediction = torch.softmax(logits_or_prob, 1).detach()
+    #     log_prob = torch.log_softmax(logits_or_prob, 1).detach()
+    #     genie_prob = None
+    # adv_loss = loss_fn(log_prob, y_target if targeted else y).detach()
+    # x_adv.requires_grad_ = False
+
+    return x_adv, loss.detach(), prob.detach(), genie_prob
 
 
 def iterated_fgsm(model: Module,
@@ -145,7 +227,8 @@ def iterated_fgsm(model: Module,
                   random: bool = False,
                   clamp: Tuple[float, float] = (0, 1),
                   restart_num: int = 1,
-                  beta = 0.0075) -> torch.Tensor:
+                  beta = 0.0075,
+                  flip_grad_ratio: float = 0.0) -> (torch.Tensor, torch.Tensor, torch.Tensor):
     """Creates an adversarial sample using the iterated Fast Gradient-Sign Method
 
     This is a white-box attack.
@@ -167,6 +250,8 @@ def iterated_fgsm(model: Module,
 
     Returns:
         x_adv: Adversarially perturbed version of x
+        adv_loss: The loss of the aversarial sample x
+        prediction: The predictions for the adversarial sample x
     """
     assert((random is False and restart_num == 1) or (random is True and restart_num >= 1))
     # is_model_training_flag = model.training
@@ -176,31 +261,42 @@ def iterated_fgsm(model: Module,
     max_loss = -1
     x_adv_l = []
     loss_l = []
+    prediction_l = []
+    genie_prob_l = []
     # We want to get the element-wise loss to decide which sample has the highest loss compared to the other random
     # start. Make sure the loss_fn that was received is cross-entropy
     loss_fn = loss_fn(reduction='none')
     for i in range(restart_num):
-        x_adv, loss = _iterative_gradient(model=model, x=x, y=y, loss_fn=loss_fn, k=k, eps=eps, norm=norm, step=step,
-                                   step_norm='inf', y_target=y_target, random=random, clamp=clamp, beta=beta)
+        x_adv, loss, prediction, genie_prob = _iterative_gradient(model=model, x=x, y=y, loss_fn=loss_fn, k=k, eps=eps, norm=norm, step=step,
+                                   step_norm='inf', y_target=y_target, random=random, clamp=clamp, beta=beta, flip_grad_ratio=flip_grad_ratio)
         x_adv_l.append(x_adv)
         loss_l.append(loss)
+        prediction_l.append(prediction)
+        genie_prob_l.append(genie_prob)
         # print("loss in iter{}:".format(i) + str(loss))
         # if loss > max_loss:
         #     best_adv = x_adv
 
-    if restart_num == 1:
-        best_adv = x_adv_l[0]
+    if restart_num == 1:  # TODO: This isn't needed
+        chosen_adv = x_adv_l[0]
+        chosen_loss = loss_l[0]
+        chosen_prediction = prediction_l[0]
+        chosen_genie_prob = genie_prob_l[0]
     else:
         x_adv_stack = torch.stack(x_adv_l)
         loss_stack = torch.stack(loss_l)
+        prediction_stack = torch.stack(prediction_l)
         if y_target is None:
             best_loss_ind = torch.argmax(loss_stack, dim=0).tolist()  # find the maximum loss between all the random starts
         else:
             best_loss_ind = torch.argmin(loss_stack, dim=0).tolist()  # find the minimum loss for the specified y_target
-        best_adv = x_adv_stack[best_loss_ind, range(x_adv_stack.size()[1])]  # make max_loss_ind numpy
+        chosen_adv = x_adv_stack[best_loss_ind, range(x_adv_stack.size()[1])]  # make max_loss_ind numpy
+        chosen_loss = loss_stack[best_loss_ind, range(x_adv_stack.size()[1])]
+        chosen_prediction = prediction_stack[best_loss_ind, range(x_adv_stack.size()[1])]
+        chosen_genie_prob = torch.stack(genie_prob_l)[best_loss_ind, range(x_adv_stack.size()[1])] if genie_prob_l[0] is not None else None
     model.unfreeze_all_layers()
     # model.train(is_model_training_flag)
-    return best_adv
+    return chosen_adv, chosen_loss, chosen_prediction, chosen_genie_prob
 
 
 def boundary(model: Module,

@@ -172,6 +172,7 @@ def load_pretrained_resnet20_cifar10_model(model):
 
 
 def load_pretrained_resnet32_cifar10_model(model):
+    # TODO: check URL
     # Define pretrained model path
     output_folder = 'models'
     if not os.path.exists(output_folder):

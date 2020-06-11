@@ -1,6 +1,6 @@
 import copy
 import os
-
+import time
 import numpy as np
 import os.path
 import torch
@@ -8,12 +8,11 @@ from torch.utils import data
 from torchvision import transforms, datasets
 from PIL import Image
 from utilities import TorchUtils
-from adversarial_utilities import create_adversarial_sign_dataset, create_adversarial_mnist_sign_dataset
-from noise_dataset_class import NoiseDataset
+from typing import Union
 
 # Normalization for CIFAR10 dataset
-mean_cifar10 = [0.485, 0.456, 0.406]
-std_cifar10 = [0.229, 0.224, 0.225]
+mean_cifar10 = (0.4914, 0.4822, 0.4465),
+std_cifar10 = (0.2023, 0.1994, 0.2010)
 normalize_cifar = transforms.Normalize(mean=mean_cifar10, std=std_cifar10)
 mnist_std = 0.3081
 mean_mnist = 0.1307
@@ -31,13 +30,21 @@ imagenet_max_val = 1
 shuffle_train_set = True
 
 
-def get_dataset_min_max_val(dataset_name: str):
+def get_dataset_min_max_val(dataset_name: str, dtype=None):
+    def _calc_normalized_val(val, mean, std, np_type):
+        assert(np_type == np.float32 or np_type == np.float64 or np_type is None)
+        if np_type is not None:
+            val = np.array([val], dtype=np_type)  # Calculate the normalized value with a certain dtype
+        return (val - mean) / std
+
     if dataset_name == 'cifar_adversarial':
         return cifar_min_val, cifar_max_val
     elif dataset_name == 'mnist_adversarial':
-        return mnist_min_val, mnist_max_val
+        return _calc_normalized_val(0, mean_mnist, mnist_std, dtype), _calc_normalized_val(1, mean_mnist, mnist_std, dtype)
     elif dataset_name == 'imagenet_adversarial':
-        return mnist_min_val, mnist_max_val
+        return imagenet_min_val, imagenet_max_val
+    elif dataset_name == 'synthetic':
+        return -5.0, 5.0
     else:
         raise NameError("No experiment name:" + dataset_name)
 
@@ -77,109 +84,62 @@ def insert_sample_to_dataset(trainloader, sample_to_insert_data, sample_to_inser
     return trainloader_with_sample
 
 
-def create_svhn_dataloaders(data_dir: str = './data', batch_size: int = 128, num_workers: int = 4):
-    """
-    create train and test pytorch dataloaders for SVHN dataset
-    :param data_dir: the folder that will contain the data
-    :param batch_size: the size of the batch for test and train loaders
-    :param num_workers: number of cpu workers which loads the GPU with the dataset
-    :return: train and test loaders along with mapping between labels and class names
-    """
+# def create_svhn_dataloaders(data_dir: str = './data', batch_size: int = 128, num_workers: int = 4):
+#     """
+#     create train and test pytorch dataloaders for SVHN dataset
+#     :param data_dir: the folder that will contain the data
+#     :param batch_size: the size of the batch for test and train loaders
+#     :param num_workers: number of cpu workers which loads the GPU with the dataset
+#     :return: train and test loaders along with mapping between labels and class names
+#     """
+#
+#     trainset = datasets.CIFAR10(root=data_dir,
+#                                 train=True,
+#                                 download=True,
+#                                 transform=transforms.Compose([transforms.ToTensor(),
+#                                                               normalize_cifar]))
+#     trainloader = data.DataLoader(trainset,
+#                                   batch_size=batch_size,
+#                                   shuffle=False,
+#                                   num_workers=num_workers)
+#
+#     data_dir = os.path.join(data_dir, 'svhn')
+#     testset = datasets.SVHN(root=data_dir,
+#                             split='test',
+#                             download=True,
+#                             transform=transforms.Compose([transforms.ToTensor(),
+#                                                           normalize_cifar]))
+#
+#     # Align as CIFAR10 dataset
+#     testset.test_data = testset.data
+#     testset.test_labels = testset.labels
+#
+#     testloader = data.DataLoader(testset,
+#                                  batch_size=batch_size,
+#                                  shuffle=False,
+#                                  num_workers=num_workers)
+#
+#     # Classes name
+#     classes_cifar10 = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
+#     classes_svhn = ('1', '2', '3', '4', '5', '6', '7', '8', '9', '0')
+#
+#     return trainloader, testloader, classes_svhn, classes_cifar10
 
-    trainset = datasets.CIFAR10(root=data_dir,
-                                train=True,
-                                download=True,
-                                transform=transforms.Compose([transforms.ToTensor(),
-                                                              normalize_cifar]))
-    trainloader = data.DataLoader(trainset,
-                                  batch_size=batch_size,
-                                  shuffle=False,
-                                  num_workers=num_workers)
 
-    data_dir = os.path.join(data_dir, 'svhn')
-    testset = datasets.SVHN(root=data_dir,
-                            split='test',
-                            download=True,
-                            transform=transforms.Compose([transforms.ToTensor(),
-                                                          normalize_cifar]))
-
-    # Align as CIFAR10 dataset
-    testset.test_data = testset.data
-    testset.test_labels = testset.labels
-
-    testloader = data.DataLoader(testset,
-                                 batch_size=batch_size,
-                                 shuffle=False,
-                                 num_workers=num_workers)
-
-    # Classes name
-    classes_cifar10 = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
-    classes_svhn = ('1', '2', '3', '4', '5', '6', '7', '8', '9', '0')
-
-    return trainloader, testloader, classes_svhn, classes_cifar10
-
-
-class transfrom_per_img_per_ch_norm(object):
-    def __init__(self):
-        pass
-
-    def __call__(self, img):
-        num_channels = img.shape[0]
-        assert(num_channels == 3)
-        per_ch_mean = torch.zeros(num_channels)
-        img_np = img.numpy()
-        for i in range(num_channels):
-            img_np[i,:,:] = (img_np[i,:,:] - np.mean(img_np[i,:,:])) / (np.std(img_np[i,:,:]) + np.finfo(float).eps)
-
-        return torch.from_numpy(img_np)
-
-def create_cifar10_dataloaders(data_dir: str = './data', batch_size: int = 128, num_workers: int = 4, train_augmentation: bool = True):
-    """
-    create train and test pytorch dataloaders for CIFAR10 dataset
-    :param data_dir: the folder that will contain the data
-    :param batch_size: the size of the batch for test and train loaders
-    :param num_workers: number of cpu workers which loads the GPU with the dataset
-    :param train_augmentation: use padding with cropping and random flipping to create data augmentation.
-    :return: train and test loaders along with mapping between labels and class names
-    """
-    if train_augmentation:
-        # Same transformation as in https://github.com/MadryLab/cifar10_challenge/blob/master/cifar10_input.py (Line 95)
-        # No mean-std normalization were used.
-        cifar_transform_train = transforms.Compose([
-            transforms.ToTensor(),
-            transforms.Lambda(lambda x: torch.nn.functional.pad(x.unsqueeze(0),
-                              (4, 4, 4, 4), mode='constant', value=0).squeeze()),
-            transforms.ToPILImage(),
-            transforms.RandomCrop(32),
-            transforms.RandomHorizontalFlip(),
-            transforms.ToTensor(), transfrom_per_img_per_ch_norm()# TODO: check per image normalization works good
-        ])
-        cifar_transform_test = transforms.Compose([transforms.ToTensor(), transfrom_per_img_per_ch_norm()])
-    else:
-        cifar_transform_train = transforms.Compose([transforms.ToTensor(), normalize_cifar])
-        cifar_transform_test = transforms.Compose([transforms.ToTensor(), normalize_cifar])
-    trainset = datasets.CIFAR10(root=data_dir,
-                                train=True,
-                                download=True,
-                                transform=cifar_transform_train)
-    trainloader = data.DataLoader(trainset,
-                                  batch_size=batch_size,
-                                  shuffle=shuffle_train_set,
-                                  num_workers=num_workers,
-                                  pin_memory=True)
-
-    testset = datasets.CIFAR10(root=data_dir,
-                               train=False,
-                               download=True,
-                               transform=cifar_transform_test)
-    testloader = data.DataLoader(testset,
-                                 batch_size=batch_size,
-                                 shuffle=False,
-                                 num_workers=num_workers,
-                                 pin_memory=True)
-    classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
-
-    return trainloader, testloader, classes
+# class transfrom_per_img_per_ch_norm(object):
+#  """ Use by calling transforms.Compose([transforms.ToTensor(), transfrom_per_img_per_ch_norm()])"
+#     def __init__(self):
+#         pass
+#
+#     def __call__(self, img):
+#         num_channels = img.shape[0]
+#         assert(num_channels == 3)
+#         per_ch_mean = torch.zeros(num_channels)
+#         img_np = img.numpy()
+#         for i in range(num_channels):
+#             img_np[i,:,:] = (img_np[i,:,:] - np.mean(img_np[i,:,:])) / (np.std(img_np[i,:,:]) + np.finfo(float).eps)
+#
+#         return torch.from_numpy(img_np)
 
 
 def create_cifar100_dataloaders(data_dir: str = './data', batch_size: int = 128, num_workers: int = 4):
@@ -234,134 +194,138 @@ def generate_noise_sample():
     return random_sample_data, random_sample_label
 
 
-class CIFAR10RandomLabels(datasets.CIFAR10):
-    """CIFAR10 dataset, with support for randomly corrupt labels.
+def create_synthetic_dataloader(samples: int = 200, shuffle: bool = True):
+    mean1 = [0, 0]
+    cov1 = [[0.01, 0], [0, 0.01]]
+    x0 = np.random.multivariate_normal(mean1, cov1, int(samples))
+    y0 = np.zeros(samples)
+    # plt.plot(x1[:, 0], x1[:, 1], 'bx')
+    # plt.axis('equal')
 
-    Params
-    ------
-    corrupt_prob: float
-        Default 0.0. The probability of a label being replaced with
-        random label.
-    num_classes: int
-        Default 10. The number of classes in the dataset.
-    """
+    ring_rad = 2
+    deg = np.linspace(0, 2*np.pi, samples)
+    ring_x, ring_y = ring_rad*np.cos(deg), ring_rad*np.sin(deg)
 
-    def __init__(self, corrupt_prob=0.0, num_classes=10, **kwargs):
-        super(CIFAR10RandomLabels, self).__init__(**kwargs)
-        self.n_classes = num_classes
-        if corrupt_prob > 0:
-            self.corrupt_labels(corrupt_prob)
+    ring_offset = np.stack([ring_x, ring_y], axis=1)
+    ratio = 1
+    mean2 = [0, 0]
+    cov2 = [[0.01, 0], [0, 0.01]]
+    x1_1 = np.random.multivariate_normal(mean2, cov2, samples) + ring_offset
+    # plt.plot(x2[:, 0], x2[:, 1], 'ro')
 
-    def corrupt_labels(self, corrupt_prob):
-        labels = np.array(self.train_labels if self.train else self.test_labels)
-        np.random.seed(12345)
-        mask = np.random.rand(len(labels)) <= corrupt_prob
-        rnd_labels = np.random.choice(self.n_classes, mask.sum())
-        labels[mask] = rnd_labels
-        # we need to explicitly cast the labels from npy.int64 to
-        # builtin int type, otherwise pytorch will fail...
-        labels = [int(x) for x in labels]
-
-        if self.train:
-            self.train_labels = labels
-        else:
-            self.test_labels = labels
+    # mean3 = [-7, 3]
+    # cov3 = [[0.5, 0], [0, 0.3]]
+    # x1_2 = np.random.multivariate_normal(mean3, cov3, int((samples - len(x1_1))/2))
+    #
+    # mean4 = [2, 5]
+    # cov4 = [[2, 0], [0, 0.3]]
+    # x1_3 = np.random.multivariate_normal(mean4, cov4, (samples - len(x1_1) - len(x1_2)))
 
 
-def create_cifar10_random_label_dataloaders(data_dir: str = './data', batch_size: int = 128, num_workers: int = 4,
-                                            label_corrupt_prob=1.0):
-    """
-    create train and test pytorch dataloaders for CIFAR10 dataset.
-    Train set can be with random labels, the probability to be random depends on label_corrupt_prob.
-    :param data_dir: the folder that will contain the data.
-    :param batch_size: the size of the batch for test and train loaders.
-    :param label_corrupt_prob: the probability to be random of label of train sample.
-    :param num_workers: number of cpu workers which loads the GPU with the dataset.
-    :return: train and test loaders along with mapping between labels and class names.
-    """
+    y1 = np.ones(samples)
+    # plt.plot(x3[:, 0], x3[:, 1], 'ro')
+    inputs = torch.Tensor(np.concatenate([x0, x1_1], axis=0))
+    labels = torch.Tensor(np.concatenate([y0, y1], axis=0)).type(torch.long)
+    return create_tensor_dataloader(inputs, labels, batch_size=100, num_workers=2,
+                                    start_idx=0, end_idx=2*samples-1, idx_step_size=1, labels_to_test=2, shuffle=shuffle)
 
-    # Trainset with random labels
-    trainset = CIFAR10RandomLabels(root=data_dir,
-                                   train=True,
-                                   download=True,
-                                   transform=transforms.Compose([transforms.ToTensor(),
-                                                                 normalize_cifar]),
-                                   corrupt_prob=label_corrupt_prob)
-    trainloader = data.DataLoader(trainset,
-                                  batch_size=batch_size,
-                                  shuffle=False,
-                                  num_workers=num_workers)
 
-    # Testset with real labels
-    testset = datasets.CIFAR10(root=data_dir,
-                               train=False,
-                               download=True,
-                               transform=transforms.Compose([transforms.ToTensor(),
-                                                             normalize_cifar]))
+def create_synthetic_dataloader2(samples: int = 1000):
+    mean1 = [-2, 0]
+    cov1 = [[1, 0], [0, 3.0]]
+    x0 = np.random.multivariate_normal(mean1, cov1, int(samples))
+    y0 = np.zeros(samples)
+    # plt.plot(x1[:, 0], x1[:, 1], 'bx')
+    # plt.axis('equal')
+
+    ratio = 0.4
+    mean2 = [2, 0]
+    cov2 = [[1, 0], [0, 0.1]]
+    x1_1 = np.random.multivariate_normal(mean2, cov2, int(ratio * samples))
+    # plt.plot(x2[:, 0], x2[:, 1], 'ro')
+
+    mean3 = [-7, 3]
+    cov3 = [[0.5, 0], [0, 0.3]]
+    x1_2 = np.random.multivariate_normal(mean3, cov3, int((samples - len(x1_1))/2))
+
+    mean4 = [2, 5]
+    cov4 = [[2, 0], [0, 0.3]]
+    x1_3 = np.random.multivariate_normal(mean4, cov4, (samples - len(x1_1) - len(x1_2)))
+
+
+    y1 = np.ones(samples)
+    # plt.plot(x3[:, 0], x3[:, 1], 'ro')
+    inputs = torch.Tensor(np.concatenate([x0, x1_1, x1_2, x1_3], axis=0))
+    labels = torch.Tensor(np.concatenate([y0, y1], axis=0)).type(torch.long)
+    return create_tensor_dataloader(inputs, labels, batch_size=100, num_workers=2,
+                                    start_idx=0, end_idx=2*samples-1, idx_step_size=1, labels_to_test=2, shuffle=True)
+
+
+def create_tensor_dataloader(input: torch.Tensor, labels: torch.Tensor, batch_size: int = 128, num_workers: int = 4,
+                             start_idx: int = 0, end_idx: int = 49, idx_step_size: Union[int, None] = 1,
+                             labels_to_test: Union[int, None] = 10, shuffle: bool = False):
+    if labels_to_test is None:
+        labels_to_test = 10
+    if idx_step_size is None:
+        idx_step_size = 1
+    testset = data.TensorDataset(input, labels)
+    indices = [i for i in range(start_idx, end_idx+1, idx_step_size)]
+    testset = data.Subset(testset, indices=indices)
     testloader = data.DataLoader(testset,
                                  batch_size=batch_size,
-                                 shuffle=False,
-                                 num_workers=num_workers)
-    classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
+                                 shuffle=shuffle,
+                                 num_workers=num_workers,
+                                 pin_memory=True)
+    classes = [str(i) for i in range(labels_to_test)]
+    return testloader, classes
 
-    return trainloader, testloader, classes
 
-
-def dataloaders_noise(data_dir: str = './data', batch_size: int = 128, num_workers: int = 4):
+def create_imagenet_test_loader(data_dir: str = './data', batch_size: int = 128, num_workers: int = 4, start_idx=0,
+                                end_idx=4999, idx_step_size=1, num_classes: int = 100):
     """
-    create trainloader for CIFAR10 dataset and testloader with noise images
-    :param data_dir: the folder that will contain the data
-    :param batch_size: the size of the batch for test and train loaders
-    :param num_workers: number of cpu workers which loads the GPU with the dataset
-    :return: train and test loaders along with mapping between labels and class names
+    :param data_dir: The location of the data root directory
+    :param batch_size: the batch size to analyze
+    :param num_workers: dataloader workers
+    :param start_idx: The first idx in indices range
+    :param end_idx: The last idx in indices range
+    :param idx_step_size: The idx step size in indices range
+    :param num_classes: The total number of classes to analyze
+    :return: A dataloader containing indices = range(start_idx, end_idx+1, idx_step_size) constituting at most num_classes
     """
-    trainset = datasets.CIFAR10(root=data_dir,
-                                train=True,
-                                download=True,
-                                transform=transforms.Compose([transforms.ToTensor(),
-                                                              normalize_cifar]))
-    trainloader = data.DataLoader(trainset,
-                                  batch_size=batch_size,
-                                  shuffle=False,
-                                  num_workers=num_workers)
-
-    testset = NoiseDataset(root=data_dir,
-                           transform=transforms.Compose([transforms.ToTensor(),
-                                                         normalize_cifar]))
-    testloader = data.DataLoader(testset,
-                                 batch_size=batch_size,
-                                 shuffle=False,
-                                 num_workers=num_workers)
-    classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
-
-    dataloaders = {'train': trainloader,
-                   'test': testloader,
-                   'classes': classes,
-                   'classes_noise': ('Noise',) * 10}
-    return dataloaders
-
-
-def create_imagenet_test_loader(data_dir: str = './data', batch_size: int = 128, num_workers: int = 4):
     # normalize = transforms.Normalize(mean=[0.485, 0.456, 0.406],
     #                                  std=[0.229, 0.224, 0.225])
+    bounds = get_dataset_min_max_val("imagenet_adversarial")
     imagenet_transform = transforms.Compose([
-            transforms.Resize(256),
-            transforms.CenterCrop(224),
+            # transforms.Resize(256),
+            transforms.CenterCrop(288),
             transforms.ToTensor(),
             # normalize,
         ])
-    data_dir = data_dir + '/imagenet/test'
+    data_dir = data_dir + '/imagenet/val'
     testset = datasets.ImageNet(root=data_dir,
                                  split='val',
-                                 download=True,
+                                 download=False,
                                  transform=imagenet_transform)
+    total_samples_per_label = 50  # The number of images for each label in the evaluation set
+    # samples_per_label = end_idx - start_idx + 1
+
+    # assert(samples_per_label <= total_samples_per_label)
+    # indices = [i for start_label_idx in range(0, labels_to_test*total_samples_per_label, total_samples_per_label)
+    #            for i in range(start_label_idx, start_label_idx + samples_per_label)]
+
+    indices = range(start_idx, end_idx+1, idx_step_size)
+    assert(max(indices) <= total_samples_per_label * num_classes)
+    print("create_imagenet_test_loader using indices:" + str(indices))
+    testset = data.Subset(testset, indices=indices)
     testloader = data.DataLoader(testset,
                                  batch_size=batch_size,
                                  shuffle=False,
-                                 num_workers=num_workers)
+                                 num_workers=num_workers,
+                                 pin_memory=True)
 
-    classes = [str(i) for i in range(1000)]
-    return testloader, classes
+    classes = [str(i) for i in range(num_classes)]
+    return testloader, classes, bounds
+
 
 class CIFAR10Adversarial(datasets.CIFAR10):
     """
@@ -397,33 +361,35 @@ class CIFAR10AdversarialTest(datasets.CIFAR10):
         """
         super(CIFAR10AdversarialTest, self).__init__(**kwargs)
         assert(self.train is False)
-        assert(start_idx >= 0 and end_idx < self.test_data.shape[0])
+        assert(start_idx >= 0 and end_idx < self.data.shape[0])
         test_samples = end_idx - start_idx + 1
-        grp_size = 100
+        grp_size = 50
         assert(test_samples % grp_size == 0)
 
         test_adv_data = torch.zeros([test_samples, 3, 32, 32])
         from utilities import plt_img
-        plt_img(self.test_data, [0])
+        # plt_img(self.data, [0])
         for index in range(test_samples):
             # use the transform on all the testset
-            img = Image.fromarray(self.test_data[index+start_idx])
+            img = Image.fromarray(self.data[index+start_idx])
             test_adv_data[index] = transform(img)
         plt_img(test_adv_data, [0])
-        self.test_data = test_adv_data
-        self.test_labels = torch.LongTensor(self.test_labels[start_idx:end_idx+1])
+        self.data = test_adv_data
+        self.targets = torch.LongTensor(self.targets[start_idx:end_idx+1])
 
+        epoch_start_time = time.time()
         device = TorchUtils.get_device()
         for index in range(int(test_samples / grp_size)):
-            # print(index)
             # save the adversarial testset
-            self.test_data[index * grp_size:(index + 1) * grp_size] = attack.create_adversarial_sample(
-                self.test_data[index * grp_size:(index + 1) * grp_size].to(device),
-                self.test_labels[index * grp_size:(index + 1) * grp_size].to(device))
+            self.data[index * grp_size:(index + 1) * grp_size] = attack.create_adversarial_sample(
+                self.data[index * grp_size:(index + 1) * grp_size].to(device),
+                self.targets[index * grp_size:(index + 1) * grp_size].to(device)).detach()
+            print("Create CIFAR adversarial testset, index: {}, time passed: {}".format(index,
+                                                                                        time.time() - epoch_start_time))
 
-        self.test_data = self.test_data.to("cpu")
+        self.data = self.data.to("cpu")
         self.transform = null_transform
-        plt_img(self.test_data, [0])
+        plt_img(self.data, [0])
 
     def __getitem__(self, index):
         """
@@ -435,11 +401,14 @@ class CIFAR10AdversarialTest(datasets.CIFAR10):
             tuple: (image, target) where target is index of the target class.
         """
 
-        target = self.test_labels[index]
+        target = self.targets[index]
         if self.target_transform is not None:
             target = self.target_transform(target)
-        img = self.test_data[index]
+        img = self.data[index]
         return img, target
+
+    def __len__(self):
+        return len(self.data)
 
 
 def create_adversarial_cifar10_dataloaders(attack, data_dir: str = './data', batch_size: int = 128, num_workers: int = 4,
@@ -456,6 +425,7 @@ def create_adversarial_cifar10_dataloaders(attack, data_dir: str = './data', bat
     :param end_idx:
     :return: train and test loaders along with mapping between labels and class names
     """
+    bounds = get_dataset_min_max_val("cifar_adversarial")
     if train_augmentation:
         # Same transformation as in https://github.com/MadryLab/cifar10_challenge/blob/master/cifar10_input.py (Line 95)
         # No mean-std normalization were used.
@@ -470,6 +440,7 @@ def create_adversarial_cifar10_dataloaders(attack, data_dir: str = './data', bat
         ])
         cifar_transform_test = transforms.Compose([transforms.ToTensor()])
     else:
+        assert(0)  # Bounds are incorrect
         cifar_transform_train = transforms.Compose([transforms.ToTensor(), normalize_cifar])
         cifar_transform_test = transforms.Compose([transforms.ToTensor(), normalize_cifar])
     trainset = datasets.CIFAR10(root=data_dir,
@@ -494,7 +465,7 @@ def create_adversarial_cifar10_dataloaders(attack, data_dir: str = './data', bat
 
     classes = ('plane', 'car', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck')
 
-    return trainloader, testloader, classes
+    return trainloader, testloader, classes, bounds
 
 
 class MnistAdversarial(datasets.MNIST):
@@ -540,44 +511,34 @@ class MnistAdversarialTest(datasets.MNIST):
         assert(self.train is False)
         assert(start_idx >= 0 and end_idx < self.test_data.shape[0])
         test_samples = end_idx - start_idx + 1
-        grp_size = 100
+        grp_size = 200
         assert(test_samples % grp_size == 0)
         plt_img_list_idx = list(range(0,5))
 
-        transform_data = torch.zeros([10000, 1, 28, 28])
+        transform_data = torch.zeros([test_samples, 1, 28, 28])
         from utilities import plt_img
         plt_img(self.test_data, plt_img_list_idx)
-        for index in range(start_idx, end_idx+1):
+        for index in range(int(test_samples)):
             # use the transform on all the testset
-            img = Image.fromarray(self.test_data[index].numpy(), mode='L')
+            img = Image.fromarray(self.test_data[index+start_idx].numpy(), mode='L')
             transform_data[index] = transform(img)
 
         self.adv_data = transform_data.clone()
+        self.targets = torch.LongTensor(self.targets[start_idx:end_idx + 1])
+
         device = TorchUtils.get_device()
-        assert(start_idx % grp_size == 0)
-        assert ((end_idx+1) % grp_size == 0)
-        for index in range(int(start_idx/grp_size), int((end_idx+1) / grp_size)):
-            print(index)
+        epoch_start_time = time.time()
+        for index in range(int(test_samples / grp_size)):
             # save the adversarial testset
             self.adv_data[index*grp_size:(index+1)*grp_size] = attack.create_adversarial_sample(
                                                 self.adv_data[index*grp_size:(index+1)*grp_size].to(device),
-                                                self.test_labels[index*grp_size:(index+1)*grp_size].to(device)).detach()
-
-
-        # TODO: notice that all the 10000 samples are copied into test_data, this is done to keep the order of the idxs so during pNML the correct idxs are called but when evaluating the DS (without pNML) the result is incorrect
-
-        """
-        This method is pytorch version agnostic which returns the data buffer. 
-        """
-        # print(calc_norm(transform_data, self.adv_data.to("cpu")))
-        if torch.__version__ == '0.4.1':
-            self.test_data = self.adv_data.to("cpu")
-        else:
-            self.data = self.adv_data.to("cpu")
+                                                self.targets[index*grp_size:(index+1)*grp_size].to(device)).detach()
+            print("Create MNIST adversarial testset, index: {}, time passed: {}".format(index,
+                                                                                        time.time() - epoch_start_time))
 
         self.transform = null_transform
         if attack.name != 'NoAttack':
-            plt_img(self.test_data, plt_img_list_idx, True)
+            plt_img(self.adv_data, plt_img_list_idx, True)
 
     def __getitem__(self, index):
         """
@@ -589,11 +550,14 @@ class MnistAdversarialTest(datasets.MNIST):
             tuple: (image, target) where target is index of the target class.
         """
 
-        target = self.test_labels[index]
+        target = self.targets[index]
         if self.target_transform is not None:
             target = self.target_transform(target)
         img = self.adv_data[index]
         return img, target
+
+    def __len__(self):
+        return len(self.adv_data)
 
 
 def calc_norm(original_data, adv_data):
@@ -609,6 +573,7 @@ def calc_norm(original_data, adv_data):
     l_inf_norm = diff.view(diff.shape[0], -1).norm(p=float('inf'), dim=-1)
     print("l_inf_norm: %.3f  l2_norm: %.3f l1_norm: %.3f" % (l_inf_norm.mean(), l2_norm.mean(), l1_norm.mean()))
     return l_inf_norm, l2_norm, l1_norm
+
 
 def create_adv_mnist_test_dataloader_preprocessed(attack, data_dir: str = './data', batch_size: int = 128,
                                                   num_workers: int = 4, start_idx: int = 0, end_idx: int = 9999):
@@ -638,7 +603,7 @@ def create_adv_mnist_test_dataloader_preprocessed(attack, data_dir: str = './dat
 
     classes = ('0', '1', '2', '3', '4', '5', '6', '7', '8', '9')
 
-    return testloader, classes
+    return testloader, classes, get_dataset_min_max_val("mnist_adversarial")
 
 
 def create_mnist_dataloaders(data_dir: str = './data', batch_size: int = 128, num_workers: int = 4):
@@ -650,7 +615,7 @@ def create_mnist_dataloaders(data_dir: str = './data', batch_size: int = 128, nu
     :return: train and test loaders along with mapping between labels and class names
     """
 
-    trainloader, _ = create_mnist_train_dataloader(data_dir, batch_size, num_workers)
+    trainloader, _, bounds = create_mnist_train_dataloader(data_dir, batch_size, num_workers)
 
     testset = datasets.MNIST(root=data_dir,
                              train=False,
@@ -663,7 +628,7 @@ def create_mnist_dataloaders(data_dir: str = './data', batch_size: int = 128, nu
                                  num_workers=num_workers)
     classes = ('0', '1', '2', '3', '4', '5', '6', '7', '8', '9')
 
-    return trainloader, testloader, classes
+    return trainloader, testloader, classes, bounds
 
 
 def create_mnist_train_dataloader(data_dir: str = './data', batch_size: int = 128, num_workers: int = 4):
@@ -687,7 +652,7 @@ def create_mnist_train_dataloader(data_dir: str = './data', batch_size: int = 12
 
     classes = ('0', '1', '2', '3', '4', '5', '6', '7', '8', '9')
 
-    return trainloader, classes
+    return trainloader, classes, get_dataset_min_max_val("mnist_adversarial")
 
 
 def null_transform(x):

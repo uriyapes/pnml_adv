@@ -1,0 +1,35 @@
+{
+    "exp_type": "imagenet_adversarial",
+    "batch_size": 50,
+    "num_workers": 2,
+    "freeze_layer": 0,
+    "num_classes": 100,
+    "adv_attack_test": {
+        "_comment": "===== IMAGE-NET ADV. TESTING =====",
+        "white_box": false,
+        "black_box_adv_path": "./output/imagenet_adversarial_results_20200602_125324/adversarials.t",
+        "attack_type": "pgd",
+        "epsilon": 0.01568627,
+        "pgd_iter": 50,
+        "pgd_step": 0.0039215,
+        "pgd_test_restart_num": 10,
+        "beta": 0.0,
+        "test_start_idx": 0,
+        "test_end_idx": 4999,
+        "idx_step_size": 1
+    },
+    "model": {
+        "_comment": "===== IMAGE-NET ADV. MODEL =====",
+        "model_arch": "resnet50",
+        "ckpt_path": "./trained_models/downloaded_models/imagenet_model_weights_4px.pth.tar",
+        "pnml_active": false
+    },
+    "fit_to_sample": {
+        "_comment": "===== IMAGE-NET PNML=====",
+        "attack_type": "fgsm",
+        "epsilon": 0.01176,
+        "pgd_iter": 1,
+        "pgd_step":  0.01176,
+        "pgd_test_restart_num": 0
+    }
+}
