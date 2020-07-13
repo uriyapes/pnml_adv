@@ -2,6 +2,12 @@
 
 This is the official implementation of "A UNIVERSAL LEARNING APPROACH FOR ADVERSARIAL DEFENSE" paper.
 
+The following figure from the paper presents CIFAR10 l-infinity PGD accuracy as a function of attack strength
+for our method and previous state-of-the-art: 
+
+
+<img src="https://i.imgur.com/BWjYlyi.jpg" width="400" height="300">
+
 
 ## Requirements:
 
