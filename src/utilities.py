@@ -31,9 +31,14 @@ def plt_img(image_batch, index_list=[0], is_save_fig=False):
     :return: 
     """
     plt.figure()
-    gs = matplotlib.gridspec.GridSpec(len(index_list), 1)
+    ncols = 1
+    nrows = max(1, int(len(index_list)/ncols))
+    fig = plt.figure()
+    # gs = matplotlib.gridspec.GridSpec(nrows, ncols, figure=fig)
+    # f, axarr = plt.subplots(2, 2)
     for i, img_index in enumerate(index_list):
-        subplot = plt.subplot(gs[i])
+        subplot = fig.add_subplot(nrows, ncols, i+1)
+        # subplot = fig.add_subplot(gs[i % nrows, int(i/nrows)])
         # convert to np image
         if type(image_batch) == np.ndarray:
             img = image_batch[img_index]
@@ -42,11 +47,11 @@ def plt_img(image_batch, index_list=[0], is_save_fig=False):
             img = (image_batch[img_index].cpu().detach().squeeze().numpy())
         if img.shape[0] == 3:
             img = np.moveaxis(img, (0,1,2), (2,0,1))  # Make img shape HxWxC
-            print(img.shape)
+            # print(img.shape)
         subplot.imshow(img, cmap='gray')  #  cmap ignored if img is 3-D
-        plt.show()
+        subplot.axis('off')
     plt.savefig('./adv_output_images.jpg', bbox_inches=plt.tight_layout()) if is_save_fig else None
-
+    plt.show()
 
 class TorchUtils(ABC):
     __device__ = None

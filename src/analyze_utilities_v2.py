@@ -80,7 +80,7 @@ def load_dir_params(path: str):
     return params
 
 
-def load_exp_result_from_dir(root_dir: str, indices: Union[list, None]):
+def load_exp_result_from_dir(root_dir: str, indices: Union[list, None] = None):
     """
     Load adversarials results and param dict of an experiment. Results are contained in the root dir or inside multiple
      subdir.
