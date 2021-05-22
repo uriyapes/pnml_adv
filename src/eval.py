@@ -15,7 +15,7 @@ torch.backends.cudnn.deterministic = False
 import json
 
 
-def eval_adversarial_dataset(model, dataloader, attack, save_adv_sample: bool = False):
+def eval_adversarial_dataset(model, dataloader, attack, save_adv_sample: bool = False, save_original_sample: bool = False):
     """
     Evaluate model performance on dataloader with attack
     :param model:
@@ -40,7 +40,7 @@ def eval_adversarial_dataset(model, dataloader, attack, save_adv_sample: bool = 
         t0 = time.time()
         data, labels = TorchUtils.to_device(data), TorchUtils.to_device(labels)
         adversarials_batch = attack.create_adversarial_sample(data, labels, get_adversarial_class=True,
-                                                              save_adv_sample=save_adv_sample)
+                                                              save_adv_sample=save_adv_sample, save_original_sample=save_original_sample)
         t1 = time.time()
         adv_batch_l.append(adversarials_batch)
         logger.info("eval_model iter_num: {} ,process time: {} ".format(iter_num, t1 - t0))
@@ -113,8 +113,12 @@ def main():
     logger_utilities.init_logger(logger_name=exp.get_exp_name(), output_root=exp.output_dir)
     logger = logger_utilities.get_logger()
     # Get models:
+    if exp.params["adv_attack_test"]["attack_type"] == "natural" or exp.params["adv_attack_test"]["attack_type"] == "spsa":
+        keep_model_grad = False
+    else:
+        keep_model_grad = True
     model_to_eval = exp.get_model(exp.params['model']['model_arch'], exp.params['model']['ckpt_path'],
-                                  exp.params['model']['pnml_active'], True if exp.params["adv_attack_test"]["attack_type"] != "natural" else False)
+                                  exp.params['model']['pnml_active'], keep_model_grad)
 
     dataloaders = exp.get_dataloaders()
 

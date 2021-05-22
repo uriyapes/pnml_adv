@@ -1,6 +1,6 @@
 # Code is based on https://github.com/oscarknagg/adversarial
 from abc import ABC, abstractmethod
-from adversarial.functional import *
+from functional import *
 import torch
 import os
 from typing import Union, List
@@ -95,11 +95,13 @@ class Natural(Attack):
         self.model = model
 
     def create_adversarial_sample(self, x: torch.Tensor, y: torch.Tensor, y_target: torch.Tensor = None,
-                                  get_adversarial_class: bool = False, save_adv_sample: bool = False):
+                                  get_adversarial_class: bool = False, save_adv_sample: bool = False,
+                                  save_original_sample: bool = False):
         loss, prob, genie_prob = self.model.eval_batch(x, y, self.model.pnml_model)
         if get_adversarial_class:
             adv_sample = x if save_adv_sample else None
-            return Adversarials(None, None, y, prob, loss, adv_sample, genie_prob)
+            # original_sample = x if save_original_sample else None  # Same as adv_sample
+            return Adversarials(None, adv_sample, None, y, prob, loss, adv_sample, genie_prob)
         else:
             return x
 
@@ -178,7 +180,8 @@ class PGD(Attack):
                                   y: Union[torch.Tensor, None],
                                   y_target: torch.Tensor = None,
                                   get_adversarial_class: bool = False,
-                                  save_adv_sample: bool = True) -> Union[torch.Tensor, Adversarials]:
+                                  save_adv_sample: bool = True,
+                                  save_original_sample: bool = False) -> Union[torch.Tensor, Adversarials]:
         adv_sample, adv_loss, adv_pred, genie_pred = iterated_fgsm(
                 self.model, x, y, self.loss_fn, self.attack_params["pgd_iter"],self.attack_params["pgd_step"],
                 self.attack_params["epsilon"], self.attack_params["norm"], y_target=y_target, random=self.attack_params["random"],
@@ -186,7 +189,49 @@ class PGD(Attack):
                 beta=self.attack_params["beta"], flip_grad_ratio=self.attack_params["flip_grad_ratio"])
         if get_adversarial_class:
             adv_sample = adv_sample if save_adv_sample else None
-            adversarials = Adversarials(self.attack_params, None, y, adv_pred, adv_loss, adv_sample, genie_pred)
+            original_sample = x if save_original_sample else None
+            adversarials = Adversarials(self.attack_params, original_sample, y, adv_pred, adv_loss, adv_sample, genie_pred)
+            return adversarials
+        else:
+            return adv_sample
+
+# from cleverhans.future.torch.attacks.spsa import spsa
+import logger_utilities
+
+class SPSA(Attack):
+    def __init__(self, model: Module, loss_fn: Callable, attack_params: dict,clamp: Tuple[float, float] = (0, 1)):
+        self.model = model
+        self.attack_params = attack_params
+        self.clamp = clamp
+
+    def create_adversarial_sample(self, x: torch.Tensor, y: Union[torch.Tensor], get_adversarial_class: bool = False,
+                                  save_adv_sample: bool = True, save_original_sample: bool = False) -> Union[torch.Tensor, Adversarials]:
+        # The true batch size (the number of evaluated inputs for each update) is `spsa_samples * spsa_iters
+        logger = logger_utilities.get_logger()
+        pnml_shrink_batch_factor = 1
+        if self.model.pnml_model is True:
+            spsa_samples = int(self.attack_params["spsa_samples"]/(pnml_shrink_batch_factor*self.attack_params["evals_per_update"]))
+            evals_per_update = int(self.attack_params["evals_per_update"] * pnml_shrink_batch_factor)
+            assert(spsa_samples>0)
+            assert(evals_per_update>0)
+            model_fn = lambda x: torch.log(self.model.calc_logits(x))
+            early_stop_loss_threshold = (-0.01, 4)
+        else:
+            spsa_samples = self.attack_params["spsa_samples"]
+            evals_per_update = self.attack_params["evals_per_update"]
+            model_fn = self.model
+            early_stop_loss_threshold = (-0.01, 10)
+        with torch.set_grad_enabled(self.model.pnml_model):
+            adv_sample = spsa(model_fn, x, self.attack_params["epsilon"], self.attack_params["pgd_iter"], y=y, norm=np.inf,
+                 clip_min=self.clamp[0], clip_max=self.clamp[1], learning_rate=0.01, delta=0.01, spsa_samples=spsa_samples,
+                      spsa_iters= evals_per_update, early_stop_loss_threshold=early_stop_loss_threshold, is_debug=False, sanity_checks=False)
+        if get_adversarial_class:
+            adv_loss, prob, genie_prob = self.model.eval_batch(adv_sample, y, enable_grad=self.model.pnml_model)
+
+            adv_sample = adv_sample if save_adv_sample else None
+            original_sample = x if save_original_sample else None
+            adversarials = Adversarials(self.attack_params, original_sample, y, prob, adv_loss, adv_sample, genie_prob)
+            logger.info("SPSA adversarial sample is correct{}".format(adversarials.correct.item()))
             return adversarials
         else:
             return adv_sample
@@ -263,6 +308,8 @@ def get_attack(attack_params: dict, model: Module = None, clamp: Tuple[float, fl
     elif attack_params["attack_type"] == 'pgd':
         # attack = PGD(model, loss_fn, eps, iter, step_size, random, clamp, 'inf', restart_num, beta, flip_grad_ratio)
         attack = PGD(model, loss_fn, attack_params, clamp, 'inf', flip_grad_ratio)
+    elif attack_params["attack_type"] == 'spsa':
+        attack = SPSA(model, loss_fn, attack_params, clamp)
     else:
         raise NameError('No attack named %s' % attack_params["attack_type"])
 

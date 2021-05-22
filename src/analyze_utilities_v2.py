@@ -8,6 +8,7 @@ import torch
 import json
 import pathlib
 from typing import Union
+import numpy as np
 
 os.sys.path.insert(0, '../src/')
 
@@ -80,7 +81,7 @@ def load_dir_params(path: str):
     return params
 
 
-def load_exp_result_from_dir(root_dir: str, indices: Union[list, None] = None):
+def load_exp_result_from_dir(root_dir: str, indices: Union[list, None] = None, merge_splitted_res_flag: bool = True):
     """
     Load adversarials results and param dict of an experiment. Results are contained in the root dir or inside multiple
      subdir.
@@ -89,7 +90,7 @@ def load_exp_result_from_dir(root_dir: str, indices: Union[list, None] = None):
     :return: adversarial object and a param dict
     """
     subdir_list = get_subdir_list(root_dir)
-    if(len(subdir_list) > 1):
+    if(len(subdir_list) > 1) and merge_splitted_res_flag:
         adv, params = merge_splitted_results_from_subdir(subdir_list)
     else:
         if len(subdir_list) == 1:
@@ -156,8 +157,52 @@ def results_dirs_to_df(subdir_list: list, indices: Union[list, None] = None) -> 
 
     return statistics_df
 
+def analyze_prob(path_adv_pnml: str, path_adv: str):
+    adv, params = load_exp_result_from_dir(path_adv)
+    adv_pnml, _ = load_exp_result_from_dir(path_adv_pnml)
+    prob_argsort = np.argsort(adv.probability[:, :].numpy(), axis=1)[:, ::-1]
+
+    true_label_loc = np.zeros(prob_argsort.shape[1])
+    pnml_correct_loc = np.zeros(prob_argsort.shape[1])
+    pnml_incorrect_loc = np.zeros(prob_argsort.shape[1])
+    for i in range(adv.true_label.shape[0]):
+        true_label_loc_idx = np.where(prob_argsort[i, :] == (adv.true_label.numpy())[i])
+        if adv.correct[i].numpy() == False:
+            true_label_loc[true_label_loc_idx] += 1
+            if adv_pnml.correct[i].numpy() == True:
+                pnml_correct_loc[true_label_loc_idx] += 1
+        elif adv_pnml.correct[i].numpy() == False:  # model is correct but pNML is incorrect
+            pnml_incorrect_loc_idx = np.where(prob_argsort[i, :] == (adv_pnml.predict[i].numpy()))
+            pnml_incorrect_loc[pnml_incorrect_loc_idx] += 1
+
+    pnml_acc = adv_pnml.get_accuracy()
+    base_acc = adv.get_accuracy()
+    hypo_num_arr = np.arange(3, 12)
+    pnml_acc_per_hypo_arr = np.zeros_like(hypo_num_arr, dtype=np.float32)
+    for i, hypo_num in enumerate(hypo_num_arr):
+        correct = adv.correct.sum() + pnml_correct_loc[:hypo_num].sum() - pnml_incorrect_loc[:hypo_num].sum()
+        pnml_acc_per_hypo_arr[i] = float(correct) / adv.true_label.shape[0]
+
+    # plt.xticks(np.arange(0, hypo_num_arr.shape[0], 1), hypo_num_arr[::1])
+    plt.plot(hypo_num_arr, pnml_acc_per_hypo_arr, label="Ours - $N$ hypotheses")
+    plt.axhline(y=pnml_acc, color='b', linestyle='--', label='Ours - all hypotheses')
+    plt.axhline(y=base_acc, color='r', linestyle='--', label='Wong et al. [2020]')
+    plt.legend(fontsize=15, ncol=1, loc=0)
+    plt.xlabel('Number of hypotheses')
+    plt.ylabel('Accuracy')
+    plt.xlim([3-0.05, hypo_num_arr[-1]+0.05])
+    plt.show()
+    print("True label location:\n{}".format(true_label_loc))
+    print("pNML correct label location:\n{}".format(pnml_correct_loc))
+    print("pNML incorrect label location:\n{}".format(pnml_incorrect_loc))
+    return true_label_loc, pnml_correct_loc, pnml_incorrect_loc
+
+
 
 if __name__ == "__main__":
+    path_adv = r'.\results\imagenet\imagenet_pgd_diff_eps\imagenet_pgd_no_pnml'
+    path_adv_pnml = r'.\results\imagenet\imagenet_pgd_diff_eps_pnml_lambda_01176\imagenet_adversarial_results_20200503_222005'
+    analyze_prob(path_adv_pnml, path_adv)
     print("start")
     # All tests were performed on the imagenet evaluation subset which includes all the samples for the first 100 classes (50 samples per each class for a total of 5000 samples).
     #
