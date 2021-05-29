@@ -1,6 +1,6 @@
 # Code is based on https://github.com/oscarknagg/adversarial
 from abc import ABC, abstractmethod
-from functional import *
+from .functional import *
 import torch
 import os
 from typing import Union, List
