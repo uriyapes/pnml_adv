@@ -150,6 +150,9 @@ def _iterative_gradient(model: Module,
     loss_fn = torch.nn.NLLLoss(reduction='none')
     targeted = y_target is not None
     # x_adv = x.clone().detach().requires_grad_(True).to(x.device)
+    x_adv_best = torch.zeros_like(x).detach()
+    loss_best = -1 * torch.ones(x.shape[0], dtype=torch.float32, device=x.device)  # Init the loss to -1 so in first iteration the loss_best and x_adv_best will be updated
+    loss_per_iter = torch.zeros([k+1, x.shape[0]], dtype=torch.float32, device=x.device)
     x_adv = x.detach().clone().to(x.device)
     if random:
         # x_adv = random_perturbation(x_adv, norm, eps)
@@ -168,10 +171,18 @@ def _iterative_gradient(model: Module,
         x_adv = x_adv.detach()
         x_adv = x_adv.requires_grad_(True)
         prediction = model.calc_log_prob(x_adv)
-        loss = loss_fn(prediction, y_target if targeted else y).mean() - beta*model.regularization.mean()
+        loss = loss_fn(prediction, y_target if targeted else y)
+
+        # Update statistics for current iteration
+        loss_per_iter[i, :] = loss.detach()
+        update_loss_max_idx = (loss_best < loss_per_iter[i, :]).detach()
+        loss_best[update_loss_max_idx] = loss_per_iter[i, update_loss_max_idx]
+        x_adv_best[update_loss_max_idx] = x_adv[update_loss_max_idx].detach()
+
+        loss_mean = loss.mean() - beta*model.regularization.mean()
         # loss.backward()
         # x_adv_grad = x_adv.grad
-        x_adv_grad = torch.autograd.grad(loss, x_adv, create_graph=False)[0]
+        x_adv_grad = torch.autograd.grad(loss_mean, x_adv, create_graph=False)[0]
         if flip_grad_ratio > 0.0:
             bit_mask = torch.rand_like(x_adv_grad) < flip_grad_ratio
             x_adv_grad[bit_mask] = x_adv_grad[bit_mask] * -1
@@ -199,20 +210,18 @@ def _iterative_gradient(model: Module,
     x_adv = x_adv.detach()
     # x_adv.requires_grad_(True) #  This is done so model with refinement could do backprop
 
-    loss, prob, genie_prob = model.eval_batch(x_adv, y_target if targeted else y, enable_grad=model.pnml_model)
-    # logits_or_prob = model(x_adv).detach()  # could be logits or probability
-    # if model.pnml_model:
-    #     prediction = logits_or_prob.detach()
-    #     log_prob = torch.log(logits_or_prob).detach()
-    #     genie_prob = model.get_genie_prob().detach()
-    # else:  # if Logits:
-    #     prediction = torch.softmax(logits_or_prob, 1).detach()
-    #     log_prob = torch.log_softmax(logits_or_prob, 1).detach()
-    #     genie_prob = None
-    # adv_loss = loss_fn(log_prob, y_target if targeted else y).detach()
-    # x_adv.requires_grad_ = False
+    # loss, prob, genie_prob = model.eval_batch(x_adv, y_target if targeted else y, enable_grad=model.pnml_model)
+    prediction = model.calc_log_prob(x_adv)
+    loss = loss_fn(prediction, y_target if targeted else y)
 
-    return x_adv, loss.detach(), prob.detach(), genie_prob
+    # Update statistics for current iteration
+    loss_per_iter[-1, :] = loss.detach()
+    update_loss_max_idx = (loss_best < loss_per_iter[-1, :]).detach()
+    # loss_best = loss_per_iter[-1, update_loss_max_idx]
+    x_adv_best[update_loss_max_idx] = x_adv[update_loss_max_idx].detach()
+    loss_best, prob, genie_prob = model.eval_batch(x_adv_best, y_target if targeted else y, enable_grad=model.pnml_model)
+
+    return x_adv_best, loss_best.detach(), prob.detach(), genie_prob
 
 
 def iterated_fgsm(model: Module,
@@ -283,7 +292,7 @@ def iterated_fgsm(model: Module,
         chosen_prediction = prediction_l[0]
         chosen_genie_prob = genie_prob_l[0]
     else:
-        x_adv_stack = torch.stack(x_adv_l)
+        x_adv_stack = torch.stack(x_adv_l)  # TODO: allocate memory in advance to speed up
         loss_stack = torch.stack(loss_l)
         prediction_stack = torch.stack(prediction_l)
         if y_target is None:
