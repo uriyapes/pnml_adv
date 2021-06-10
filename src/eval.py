@@ -15,7 +15,7 @@ torch.backends.cudnn.deterministic = False
 import json
 
 
-def eval_adversarial_dataset(model, dataloader, attack, save_adv_sample: bool = False, save_original_sample: bool = False):
+def eval_adversarial_dataset(dataloader, attack, save_adv_sample: bool = False, save_original_sample: bool = False):
     """
     Evaluate model performance on dataloader with attack
     :param model:
@@ -29,7 +29,6 @@ def eval_adversarial_dataset(model, dataloader, attack, save_adv_sample: bool = 
     except:
         pass
     logger = logger_utilities.get_logger()
-    model.eval()  # TODO: model isn't required because model.eval() is done inside attack (make sure before removing)
     adversarials = None
     logger.info("Starting eval...")
     if save_adv_sample:
@@ -117,13 +116,21 @@ def main():
         keep_model_grad = False
     else:
         keep_model_grad = True
-    model_to_eval = exp.get_model(exp.params['model']['model_arch'], exp.params['model']['ckpt_path'],
-                                  exp.params['model']['pnml_active'], keep_model_grad)
+
+    model_to_attack = exp.get_model(exp.params['model_to_attack']['model_arch'], exp.params['model_to_attack']['ckpt_path'],
+                                  exp.params['model_to_attack']['pnml_active'], keep_model_grad)
+    model_to_attack.eval()
+    if exp.params['use_same_model_for_attack_and_eval']:
+        model_to_eval = None
+    else:
+        model_to_eval = exp.get_model(exp.params['model_to_eval']['model_arch'], exp.params['model_to_eval']['ckpt_path'],
+                                      exp.params['model_to_eval']['pnml_active'], False)
+        model_to_eval.eval()
 
     dataloaders = exp.get_dataloaders()
 
     # Get adversarial attack:
-    attack = exp.get_attack_for_model(model_to_eval)
+    attack = exp.get_attack_for_model(model_to_attack, model_to_eval)
 
     with open(os.path.join(logger.output_folder, 'params.json'), 'w', encoding='utf8') as outfile:
         outfile.write(json.dumps(exp.params, indent=4, sort_keys=False))
@@ -137,7 +144,7 @@ def main():
     # logger.info("Pnml model natural - Accuracy: {}, Loss: {}".format(natural_pnml.get_accuracy(), natural_pnml.get_mean_loss()))
 
 
-    adv = eval_adversarial_dataset(model_to_eval, dataloaders['test'], attack, general_args['save'])
+    adv = eval_adversarial_dataset(dataloaders['test'], attack, general_args['save'])
     loss = adv.get_mean_loss()
     acc = adv.get_accuracy()
     logger.info("Accuracy: {}, Loss: {}".format(acc, loss))

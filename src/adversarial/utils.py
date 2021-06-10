@@ -85,3 +85,8 @@ def generate_misclassified_sample(model: Module,
 
         if model(x_misclassified).argmax(dim=1) != y:
             return x_misclassified
+
+
+def add_uniform_random_noise(x: torch.Tensor, epsilon: float, clamp: list):
+    rand_gen = torch.distributions.uniform.Uniform(x - epsilon, x + epsilon)  # Create a point around x_adv within a range of eps
+    return rand_gen.sample().clamp(*clamp)

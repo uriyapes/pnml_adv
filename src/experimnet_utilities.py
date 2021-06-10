@@ -238,5 +238,5 @@ class Experiment:
 
         return name
 
-    def get_attack_for_model(self, model):
-        return get_attack(self.params["adv_attack_test"], model, get_dataset_min_max_val(self.exp_type))
+    def get_attack_for_model(self, model_to_attack, model_to_eval):
+        return get_attack(self.params["adv_attack_test"], model_to_attack, model_to_eval, get_dataset_min_max_val(self.exp_type))
