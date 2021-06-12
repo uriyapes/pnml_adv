@@ -29,7 +29,6 @@ def eval_adversarial_dataset(dataloader, attack, save_adv_sample: bool = False, 
     except:
         pass
     logger = logger_utilities.get_logger()
-    adversarials = None
     logger.info("Starting eval...")
     if save_adv_sample:
         logger.info("Save adversarial samples generated")
@@ -38,17 +37,13 @@ def eval_adversarial_dataset(dataloader, attack, save_adv_sample: bool = False, 
 
         t0 = time.time()
         data, labels = TorchUtils.to_device(data), TorchUtils.to_device(labels)
-        adversarials_batch = attack.create_adversarial_sample(data, labels, get_adversarial_class=True,
-                                                              save_adv_sample=save_adv_sample, save_original_sample=save_original_sample)
+        # adversarials_batch = attack.create_adversarial_sample(data, labels, get_adversarial_class=True,
+        #                                                       save_adv_sample=save_adv_sample, save_original_sample=save_original_sample)
+
+        adversarials_batch = attack.get_adversarial_object(data, labels)
         t1 = time.time()
         adv_batch_l.append(adversarials_batch)
         logger.info("eval_model iter_num: {} ,process time: {} ".format(iter_num, t1 - t0))
-        # if iter_num == 0:
-        #     adversarials = adversarials_batch
-        # else:
-        #     adversarials.merge(adversarials_batch)
-        # t2 = time.time()
-        # logger.info("eval_model iter_num: {} ,process time: {} save time: {} ".format(iter_num, t1-t0, t2-t1))
 
     adversarials = adv_batch_l[0].cat(adv_batch_l)
     try:
@@ -78,9 +73,9 @@ def eval_all(base_model, dataloader, attack, exp: Experiment):
 
 def main():
     parser = jsonargparse.ArgumentParser(description='General arguments', default_meta=False)
-    parser.add_argument('-t', '--general.experiment_type', default='cifar_adversarial',
+    parser.add_argument('-t', '--general.experiment_type', default='mnist_adversarial',
                         help='Type of experiment to execute', type=str)
-    parser.add_argument('-p', '--general.param_file_path', default=os.path.join('./src/parameters', 'cifar_params.json'),
+    parser.add_argument('-p', '--general.param_file_path', default=os.path.join('./src/parameters', 'mnist_params.json'),
                         help='param file path used to load the parameters file containing default values to all '
                              'parameters', type=str)
     parser.add_argument('--general.save', default=False, action='store_true',
@@ -142,7 +137,6 @@ def main():
     # logger.info("Pnml model adversarial - Accuracy: {}, Loss: {}".format(adv_pnml.get_accuracy(), adv_pnml.get_mean_loss()))
     # logger.info("Base model natural - Accuracy: {}, Loss: {}".format(natural.get_accuracy(), natural.get_mean_loss()))
     # logger.info("Pnml model natural - Accuracy: {}, Loss: {}".format(natural_pnml.get_accuracy(), natural_pnml.get_mean_loss()))
-
 
     adv = eval_adversarial_dataset(dataloaders['test'], attack, general_args['save'])
     loss = adv.get_mean_loss()

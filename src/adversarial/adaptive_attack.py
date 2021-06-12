@@ -6,7 +6,7 @@ from adversarial.utils import add_uniform_random_noise, project
 
 
 class EotPgdAttack(BaseAttack):
-    def __init__(self, is_record_stats: bool, choose_best_adv_recorded: bool, *args, **kwargs):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         if self.attack_params.get("beta") is None:
             self.attack_params["beta"] = 0.0
@@ -20,9 +20,9 @@ class EotPgdAttack(BaseAttack):
         self.attack_params["epsilon"] = self.attack_params["epsilon"] * (self.attack_params["clamp"][1] - self.attack_params["clamp"][0])
         self.attack_params["pgd_step"] = self.attack_params["pgd_step"] * (self.attack_params["clamp"][1] - self.attack_params["clamp"][0])
         self.loss_fn = torch.nn.NLLLoss(reduction='none')
-        self.is_record_stats = is_record_stats
-        self.choose_best_adv_recorded = choose_best_adv_recorded
-        assert (self.choose_best_adv_recorded and self.is_record_stats) or self.choose_best_adv_recorded is False
+        # self.is_record_stats = is_record_stats
+        # self.choose_best_adv_recorded = choose_best_adv_recorded
+        # assert (self.choose_best_adv_recorded and self.is_record_stats) or self.choose_best_adv_recorded is False
 
     def _create_adversarial_sample(self, x: torch.Tensor, y: Union[torch.Tensor, None], y_target: torch.Tensor = None):
         x_adv_l = []
@@ -90,10 +90,10 @@ class EotPgdAttack(BaseAttack):
                 break
 
             x_adv_grad = torch.autograd.grad(loss_mean, x_adv, create_graph=False)[0]
-            self._record_EOT_variables(x_adv_grad, i)
+            self._record_EOT_variables(x_adv_grad, i%self.attack_params["EOT_num_of_iter_to_avg"])
 
             # Add perturbation and project back into l_norm ball around x:
-            if (i+1) % self.attack_params["EOT_iterations"] != 0:
+            if (i+1) % self.attack_params["EOT_num_of_iter_to_avg"] != 0:
                 pert = self._calc_perturbation(x_adv, x_adv_grad)
                 x_adv = project(x, x_adv + pert, self.attack_params["norm"], self.attack_params["epsilon"]).clamp(
                     *self.attack_params["clamp"]).detach_()
@@ -137,7 +137,7 @@ class EotPgdAttack(BaseAttack):
 
     # noinspection PyPep8Naming
     def _init_record_EOT_buffers(self, x):
-        self.grad_per_iter = torch.zeros([self.attack_params["num_of_iter_to_avg"], x.shape[0]], dtype=torch.float32,
+        self.grad_per_iter = torch.zeros([self.attack_params["EOT_num_of_iter_to_avg"]] + list(x.shape), dtype=torch.float32,
                                          device=x.device)
         self.pre_EOT_x_adv = torch.zeros_like(x).detach()
 

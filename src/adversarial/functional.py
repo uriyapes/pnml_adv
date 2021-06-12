@@ -122,7 +122,8 @@ def _iterative_gradient(model: Module,
                         random: bool = False,
                         clamp: Tuple[float, float] = (0, 1),
                         beta=0.0,
-                        flip_grad_ratio: float = 0.0) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+                        flip_grad_ratio: float = 0.0,
+                        model_to_eval: Union[Module, None] = None) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     """Base function for PGD and iterated FGSM
 
     Args:
@@ -237,7 +238,8 @@ def iterated_fgsm(model: Module,
                   clamp: Tuple[float, float] = (0, 1),
                   restart_num: int = 1,
                   beta = 0.0075,
-                  flip_grad_ratio: float = 0.0) -> (torch.Tensor, torch.Tensor, torch.Tensor):
+                  flip_grad_ratio: float = 0.0,
+                  model_to_eval = None) -> (torch.Tensor, torch.Tensor, torch.Tensor):
     """Creates an adversarial sample using the iterated Fast Gradient-Sign Method
 
     This is a white-box attack.

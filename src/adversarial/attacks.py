@@ -1,74 +1,11 @@
 # Code is based on https://github.com/oscarknagg/adversarial
 from abc import ABC, abstractmethod
+
+from .adaptive_attack import EotPgdAttack
+from .adversarial_container import AdversarialContainer
 from .functional import *
 import torch
-import os
 from typing import Union, List
-
-
-class Adversarials(object):
-    def __init__(self, attack_params: Union[dict, None], original_sample: Union[torch.Tensor, None], true_label: torch.Tensor, probability: torch.Tensor, loss: torch.Tensor,
-                  adversarial_sample: Union[torch.Tensor, None] = None, genie_prob: Union[torch.Tensor, None] = None):
-        """
-
-        :param original_sample: The original data (non adversarial)
-        :param true_label: The true label
-        :param probability: The adversarial_sample (original_sample if adversarial_sample=None) probabilities for each label
-        :param loss: cross-entropy loss (this is not calculated using probabilities because torch.log_softmax(logits))
-                                        is more numerical stable than torch.log(probabilities))
-        :param adversarial_sample: Adversarial sample (if exist)
-        :param genie_prob: Genie probability from PnmlModel (if exist)
-        """
-        self.attack_params = attack_params
-        # TODO: pre-allocate memory in advance using dataset shape
-        self.original_sample = original_sample.detach().cpu() if original_sample is not None else None
-        self.true_label = true_label.detach().cpu()
-        self.adversarial_sample = adversarial_sample.detach().cpu() if adversarial_sample is not None else None
-        self.probability = probability.detach().cpu()
-        self.predict = torch.max(self.probability, 1)[1]
-        self.correct = (self.predict == self.true_label)
-        self.loss = loss.detach().cpu()
-        if genie_prob is not None:
-            self.genie_prob = genie_prob.detach().cpu()
-            self.regret = torch.log(self.genie_prob.sum(dim=1, keepdim=False))
-        else:
-            self.genie_prob = None
-            self.regret = None
-
-    def merge(self, adv):
-        self.original_sample = torch.cat([self.original_sample, adv.original_sample], dim=0) if adv.original_sample is not None else None
-        self.true_label = torch.cat([self.true_label, adv.true_label])
-        self.adversarial_sample = torch.cat([self.adversarial_sample, adv.adversarial_sample]) if adv.adversarial_sample is not None else None
-        self.probability = torch.cat([self.probability, adv.probability])
-        self.predict = torch.cat([self.predict, adv.predict])
-        self.correct = torch.cat([self.correct, adv.correct])
-        self.loss = torch.cat([self.loss, adv.loss])
-        if self.genie_prob is not None:
-            self.genie_prob = torch.cat([self.genie_prob, adv.genie_prob])
-            self.regret = torch.cat([self.regret, torch.log(adv.genie_prob.sum(dim=1, keepdim=False))])
-
-    @staticmethod
-    def cat(adv_l: List):
-        adv_l[0].original_sample = torch.cat([adv.original_sample for adv in adv_l], dim=0) if adv_l[0].original_sample is not None else None
-        adv_l[0].true_label = torch.cat([adv.true_label for adv in adv_l])
-        adv_l[0].adversarial_sample = torch.cat([adv.adversarial_sample for adv in adv_l]) if adv_l[0].adversarial_sample is not None else None
-        adv_l[0].probability = torch.cat([adv.probability for adv in adv_l])
-        adv_l[0].predict = torch.cat([adv.predict for adv in adv_l])
-        adv_l[0].correct = torch.cat([adv.correct for adv in adv_l])
-        adv_l[0].loss = torch.cat([adv.loss for adv in adv_l])
-        if adv_l[0].genie_prob is not None:
-            adv_l[0].genie_prob = torch.cat([adv.genie_prob for adv in adv_l])
-            adv_l[0].regret = torch.cat([adv.regret for adv in adv_l])
-        return adv_l[0]
-
-    def dump(self, path_to_folder: str, file_name: str = "adversarials.t"):
-        torch.save(self, os.path.join(path_to_folder, file_name))
-
-    def get_mean_loss(self):
-        return self.loss.sum().item() / len(self.loss)
-
-    def get_accuracy(self):
-        return float(self.correct.sum().item()) / len(self.correct)
 
 
 class Attack(ABC):
@@ -101,7 +38,7 @@ class Natural(Attack):
         if get_adversarial_class:
             adv_sample = x if save_adv_sample else None
             # original_sample = x if save_original_sample else None  # Same as adv_sample
-            return Adversarials(None, adv_sample, None, y, prob, loss, adv_sample, genie_prob)
+            return AdversarialContainer(None, adv_sample, None, y, prob, loss, adv_sample, genie_prob)
         else:
             return x
 
@@ -205,7 +142,7 @@ class SPSA(Attack):
         self.clamp = clamp
 
     def create_adversarial_sample(self, x: torch.Tensor, y: Union[torch.Tensor], get_adversarial_class: bool = False,
-                                  save_adv_sample: bool = True, save_original_sample: bool = False) -> Union[torch.Tensor, Adversarials]:
+                                  save_adv_sample: bool = True, save_original_sample: bool = False) -> Union[torch.Tensor, AdversarialContainer]:
         # The true batch size (the number of evaluated inputs for each update) is `spsa_samples * spsa_iters
         logger = logger_utilities.get_logger()
         pnml_shrink_batch_factor = 1
@@ -230,7 +167,7 @@ class SPSA(Attack):
 
             adv_sample = adv_sample if save_adv_sample else None
             original_sample = x if save_original_sample else None
-            adversarials = Adversarials(self.attack_params, original_sample, y, prob, adv_loss, adv_sample, genie_prob)
+            adversarials = AdversarialContainer(self.attack_params, original_sample, y, prob, adv_loss, adv_sample, genie_prob)
             logger.info("SPSA adversarial sample is correct{}".format(adversarials.correct.item()))
             return adversarials
         else:
@@ -283,7 +220,7 @@ class Boundary(Attack):
         return boundary(model, x, y, self.orthogonal_step, self.perpendicular_step, self.k, initial, clamp)
 
 
-def get_attack(attack_params: dict, model: Module = None, clamp: Tuple[float, float] = (0, 1),
+def get_attack(attack_params: dict, model_to_attack: Module = None, model_to_eval: Module = None, clamp: Tuple[float, float] = (0, 1),
                loss_fn: Callable = torch.nn.CrossEntropyLoss, flip_grad_ratio=0.0, num_class:int = 10):
     """
     :param attack_params: a dictionary containing attack parameters. Dictionary keys:
@@ -293,7 +230,7 @@ def get_attack(attack_params: dict, model: Module = None, clamp: Tuple[float, fl
         pgd_step
         pgd_test_restart_num
         beta
-    :param model: The model to be attacked
+    :param model_to_attack: The model_to_attack to be attacked
     :param clamp: The value range of the samples
     :param  loss_fn:
     :param flip_grad_ratio:
@@ -301,15 +238,17 @@ def get_attack(attack_params: dict, model: Module = None, clamp: Tuple[float, fl
     if attack_params["attack_type"] == 'no_attack':
         attack = NoAttack()
     elif attack_params["attack_type"] == "natural":
-        attack = Natural(model)
+        attack = Natural(model_to_attack)
     elif attack_params["attack_type"] == 'fgsm':
         raise DeprecationWarning("For fgsm attack use pgd with pgd_test_restart_num=0, pgd_iter=1, pgd_step=epsilon")
-        # attack = FGSM(model, loss_fn, attack_params["epsilon"], num_class, clamp)
+        # attack = FGSM(model_to_attack, loss_fn, attack_params["epsilon"], num_class, clamp)
     elif attack_params["attack_type"] == 'pgd':
-        # attack = PGD(model, loss_fn, eps, iter, step_size, random, clamp, 'inf', restart_num, beta, flip_grad_ratio)
-        attack = PGD(model, loss_fn, attack_params, clamp, 'inf', flip_grad_ratio)
+        # attack = PGD(model_to_attack, loss_fn, eps, iter, step_size, random, clamp, 'inf', restart_num, beta, flip_grad_ratio)
+        attack = PGD(model_to_attack, model_to_eval, loss_fn, attack_params, clamp, 'inf', flip_grad_ratio)
+    elif attack_params["attack_type"] == 'eot':
+        attack = EotPgdAttack(model_to_attack, model_to_eval, loss_fn, attack_params, clamp, 'inf')
     elif attack_params["attack_type"] == 'spsa':
-        attack = SPSA(model, loss_fn, attack_params, clamp)
+        attack = SPSA(model_to_attack, loss_fn, attack_params, clamp)
     else:
         raise NameError('No attack named %s' % attack_params["attack_type"])
 
