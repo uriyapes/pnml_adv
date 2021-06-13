@@ -25,14 +25,14 @@ class BaseAttack(ABC):
         self.attack_params["clamp"] = clamp
 
     def get_adversarial_tensor(self, x: torch.Tensor, y: Union[torch.Tensor, None], y_target: torch.Tensor = None) -> torch.Tensor:
-        adv_sample, adv_loss, adv_pred, genie_pred = self.create_adversarial_sample(x, y, y_target)
+        adv_sample, adv_loss, adv_pred, genie_pred, loss_per_iter = self.create_adversarial_sample(x, y, y_target)
         return adv_sample
 
     def get_adversarial_object(self, x: torch.Tensor, y: Union[torch.Tensor, None], y_target: torch.Tensor = None) -> AdversarialContainer:
-        adv_sample, adv_loss, adv_pred, genie_pred = self.create_adversarial_sample(x, y, y_target)
+        adv_sample, adv_loss, adv_pred, genie_pred, loss_per_iter = self.create_adversarial_sample(x, y, y_target)
         adv_sample = adv_sample if self.attack_params['save_adv_sample'] else None
         original_sample = x if self.attack_params['save_original_sample'] else None
-        adversarials = AdversarialContainer(self.attack_params, original_sample, y, adv_pred, adv_loss, adv_sample, genie_pred)
+        adversarials = AdversarialContainer(self.attack_params, original_sample, y, adv_pred, adv_loss, adv_sample, genie_pred, loss_per_iter)
         return adversarials
 
     def create_adversarial_sample(self, x: torch.Tensor, y: Union[torch.Tensor, None], y_target: torch.Tensor = None):
@@ -40,13 +40,13 @@ class BaseAttack(ABC):
         if self.model_to_eval:
             self.model_to_eval.freeze_all_layers()
 
-        adv_sample, adv_loss, adv_pred, genie_pred = self._create_adversarial_sample(x, y, y_target)
+        adv_sample, adv_loss, adv_pred, genie_pred, loss_per_iter = self._create_adversarial_sample(x, y, y_target)
 
         self.model_to_attack.unfreeze_all_layers()
         if self.model_to_eval:
             self.model_to_eval.unfreeze_all_layers()
 
-        return adv_sample, adv_loss, adv_pred, genie_pred
+        return adv_sample, adv_loss, adv_pred, genie_pred, loss_per_iter
 
     @abstractmethod
     def _create_adversarial_sample(self,  x: torch.Tensor, y: Union[torch.Tensor, None], y_target: torch.Tensor = None):

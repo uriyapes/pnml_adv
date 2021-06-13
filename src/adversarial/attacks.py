@@ -38,7 +38,7 @@ class Natural(Attack):
         if get_adversarial_class:
             adv_sample = x if save_adv_sample else None
             # original_sample = x if save_original_sample else None  # Same as adv_sample
-            return AdversarialContainer(None, adv_sample, None, y, prob, loss, adv_sample, genie_prob)
+            return AdversarialContainer(None, adv_sample, y, prob, loss, adv_sample, genie_prob)
         else:
             return x
 
@@ -118,7 +118,7 @@ class PGD(Attack):
                                   y_target: torch.Tensor = None,
                                   get_adversarial_class: bool = False,
                                   save_adv_sample: bool = True,
-                                  save_original_sample: bool = False) -> Union[torch.Tensor, Adversarials]:
+                                  save_original_sample: bool = False) -> Union[torch.Tensor, AdversarialContainer]:
         adv_sample, adv_loss, adv_pred, genie_pred = iterated_fgsm(
                 self.model, x, y, self.loss_fn, self.attack_params["pgd_iter"],self.attack_params["pgd_step"],
                 self.attack_params["epsilon"], self.attack_params["norm"], y_target=y_target, random=self.attack_params["random"],
@@ -127,7 +127,7 @@ class PGD(Attack):
         if get_adversarial_class:
             adv_sample = adv_sample if save_adv_sample else None
             original_sample = x if save_original_sample else None
-            adversarials = Adversarials(self.attack_params, original_sample, y, adv_pred, adv_loss, adv_sample, genie_pred)
+            adversarials = AdversarialContainer(self.attack_params, original_sample, y, adv_pred, adv_loss, adv_sample, genie_pred)
             return adversarials
         else:
             return adv_sample

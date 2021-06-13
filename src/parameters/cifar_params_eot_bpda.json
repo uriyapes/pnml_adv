@@ -1,0 +1,65 @@
+{
+    "exp_type": "cifar_adversarial",
+    "batch_size": 75,
+    "num_workers": 4,
+    "freeze_layer": 0,
+    "adv_attack_test": {
+        "_comment": "===== CIFAR ADVERSARY TESTING =====",
+        "save_adv_sample": true,
+        "save_original_sample": true,
+        "white_box": true,
+        "black_box_adv_path": "./results/cifar/code_v2/pgd_madry_diff_eps/cifar_adversarial_results_20200513_161318/adversarials.t",
+        "attack_type": "eot",
+        "epsilon": 0.031,
+        "pgd_iter": 750,
+        "EOT_num_of_iter_to_avg": 50,
+        "pgd_step": 0.003,
+        "pgd_test_restart_num": 1,
+        "beta": 0.0,
+        "test_start_idx": 0,
+        "test_end_idx": 9999,
+        "idx_step_size": 1
+    },
+    "use_same_model_for_attack_and_eval": true,
+    "model_to_attack": {
+        "_comment": "===== CIFAR MODEL =====",
+        "model_arch": "RST",
+        "ckpt_path": "./trained_models/downloaded_models/rst_adv.pt.ckpt",
+        "pnml_active": true
+    },
+    "model_to_eval": {
+        "_comment": "===== CIFAR MODEL =====",
+        "model_arch": "RST",
+        "ckpt_path": "./trained_models/downloaded_models/rst_adv.pt.ckpt",
+        "pnml_active": true
+    },
+    "fit_to_sample": {
+        "_comment": "===== CIFAR PNML=====",
+        "attack_type": "fgsm",
+        "epsilon": 0.03,
+        "pgd_iter": 1,
+        "pgd_step": 0.03,
+        "pgd_test_restart_num": 0
+    },
+    "initial_training": {
+        "_comment": "===== CIFAR10 ADVERSARY TRAINING =====",
+        "eval_test_every_n_epoch": 1,
+        "save_model_every_n_epoch": 9999,
+        "epochs": 204,
+        "lr": 0.001,
+        "momentum": 0.9,
+        "step_size": [100,150],
+        "gamma": 0.1,
+        "weight_decay": 0.0002,
+        "loss_goal": 0.0,
+        "adv_alpha": 1.0,
+        "adv_attack_train": {
+            "attack_type": "pgd",
+            "epsilon": 0.0313,
+            "pgd_iter": 7,
+            "pgd_step": 0.0078,
+            "pgd_test_restart_num": 0,
+            "beta": 0.0
+        }
+    }
+}

@@ -5,7 +5,8 @@ from typing import Union, List
 
 class AdversarialContainer(object):
     def __init__(self, attack_params: Union[dict, None], original_sample: Union[torch.Tensor, None], true_label: torch.Tensor, probability: torch.Tensor, loss: torch.Tensor,
-                  adversarial_sample: Union[torch.Tensor, None] = None, genie_prob: Union[torch.Tensor, None] = None):
+                  adversarial_sample: Union[torch.Tensor, None] = None, genie_prob: Union[torch.Tensor, None] = None,
+                 loss_per_iter: Union[None, torch.Tensor] = None):
         """
 
         :param original_sample: The original data (non adversarial)
@@ -31,6 +32,7 @@ class AdversarialContainer(object):
         else:
             self.genie_prob = None
             self.regret = None
+        self.loss_per_iter = loss_per_iter.detach().cpu()
 
     def merge(self, adv):
         self.original_sample = torch.cat([self.original_sample, adv.original_sample], dim=0) if adv.original_sample is not None else None
@@ -43,6 +45,7 @@ class AdversarialContainer(object):
         if self.genie_prob is not None:
             self.genie_prob = torch.cat([self.genie_prob, adv.genie_prob])
             self.regret = torch.cat([self.regret, torch.log(adv.genie_prob.sum(dim=1, keepdim=False))])
+        self.loss_per_iter = torch.cat([self.loss_per_iter, adv.loss_per_iter])
 
     @staticmethod
     def cat(adv_l: List):
@@ -56,6 +59,7 @@ class AdversarialContainer(object):
         if adv_l[0].genie_prob is not None:
             adv_l[0].genie_prob = torch.cat([adv.genie_prob for adv in adv_l])
             adv_l[0].regret = torch.cat([adv.regret for adv in adv_l])
+        adv_l[0].loss_per_iter = torch.cat([adv.loss_per_iter for adv in adv_l])
         return adv_l[0]
 
     def dump(self, path_to_folder: str, file_name: str = "adversarials.t"):

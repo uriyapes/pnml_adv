@@ -29,6 +29,7 @@ class EotPgdAttack(BaseAttack):
         loss_l = []
         prediction_l = []
         genie_prob_l = []
+        loss_per_iter_l = []
         # We want to get the element-wise loss to decide which sample has the highest loss compared to the other random
         # start. Make sure the loss_fn that was received is cross-entropy
         for i in range(self.attack_params["pgd_test_restart_num"]):
@@ -37,11 +38,12 @@ class EotPgdAttack(BaseAttack):
             else:
                 x_adv = x.detach().clone().to(x.device)
 
-            x_adv, loss, prediction, genie_prob = self._pgd_attack(x, x_adv, y, y_target)
+            x_adv, loss, prediction, genie_prob, loss_per_iter = self._pgd_attack(x, x_adv, y, y_target)
             x_adv_l.append(x_adv)
             loss_l.append(loss)
             prediction_l.append(prediction)
             genie_prob_l.append(genie_prob)
+            loss_per_iter_l.append(loss_per_iter)
             # print("loss in iter{}:".format(i) + str(loss))
 
         if self.attack_params["pgd_test_restart_num"] == 1:  # TODO: This isn't needed
@@ -49,6 +51,7 @@ class EotPgdAttack(BaseAttack):
             chosen_loss = loss_l[0]
             chosen_prediction = prediction_l[0]
             chosen_genie_prob = genie_prob_l[0]
+            chosen_loss_per_iter = loss_per_iter_l[0]
         else:
             x_adv_stack = torch.stack(x_adv_l)  # TODO: allocate memory in advance to speed up
             loss_stack = torch.stack(loss_l)
@@ -61,7 +64,8 @@ class EotPgdAttack(BaseAttack):
             chosen_loss = loss_stack[best_loss_ind, range(x_adv_stack.size()[1])]
             chosen_prediction = prediction_stack[best_loss_ind, range(x_adv_stack.size()[1])]
             chosen_genie_prob = torch.stack(genie_prob_l)[best_loss_ind, range(x_adv_stack.size()[1])] if genie_prob_l[0] is not None else None
-        return chosen_adv, chosen_loss, chosen_prediction, chosen_genie_prob
+            chosen_loss_per_iter = torch.stack(loss_per_iter_l)[best_loss_ind, range(x_adv_stack.size()[1])]
+        return chosen_adv, chosen_loss, chosen_prediction, chosen_genie_prob, chosen_loss_per_iter
 
     def _pgd_attack(self,  x: torch.Tensor, x_adv: torch.Tensor, y: Union[torch.Tensor, None], y_target: torch.Tensor = None):
         # Prepare data:
@@ -116,7 +120,7 @@ class EotPgdAttack(BaseAttack):
             loss_best, prob, genie_prob = self.model_to_attack.eval_batch(self.x_adv_best, y_target if self._is_targeted else y,
                                                        enable_grad=self.model_to_attack.pnml_model)
 
-        return self.x_adv_best, loss_best.detach(), prob.detach(), genie_prob
+        return self.x_adv_best, loss_best.detach(), prob.detach(), genie_prob, self.loss_per_iter.T
 
     def _record_stats(self, x_adv, idx, loss):
         # Update statistics for current iteration
