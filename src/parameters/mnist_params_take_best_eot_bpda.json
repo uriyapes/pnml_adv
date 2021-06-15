@@ -1,6 +1,6 @@
 {
     "exp_type": "mnist_adversarial",
-    "batch_size": 300,
+    "batch_size": 1000,
     "num_workers": 4,
     "freeze_layer": 0,
     "adv_attack_test": {

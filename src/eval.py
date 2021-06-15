@@ -107,7 +107,8 @@ def main():
     logger_utilities.init_logger(logger_name=exp.get_exp_name(), output_root=exp.output_dir)
     logger = logger_utilities.get_logger()
     # Get models:
-    if exp.params["adv_attack_test"]["attack_type"] == "natural" or exp.params["adv_attack_test"]["attack_type"] == "spsa":
+    if exp.params["adv_attack_test"]["attack_type"] == "natural" or exp.params["adv_attack_test"]["attack_type"] == "spsa"\
+            or exp.params["model_to_attack"]["pnml_active"] is False:
         keep_model_grad = False
     else:
         keep_model_grad = True

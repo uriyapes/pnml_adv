@@ -1,6 +1,6 @@
 {
     "exp_type": "mnist_adversarial",
-    "batch_size": 3000,
+    "batch_size": 2500,
     "num_workers": 4,
     "freeze_layer": 0,
     "adv_attack_test": {
@@ -11,8 +11,8 @@
         "black_box_adv_path": "./results/MNIST/code_ver_2/300_iter_research/bpda_model_300_iter_pgd_diff_eps/mnist_adversarial_results_20200528_210351/adversarials.t",
         "attack_type": "eot",
         "epsilon": 0.3,
-        "pgd_iter": 50,
-        "EOT_num_of_iter_to_avg": 9999,
+        "pgd_iter": 300,
+        "EOT_num_of_iter_to_avg": 0,
         "pgd_step": 0.01,
         "pgd_test_restart_num": 20,
         "beta": 0.0,

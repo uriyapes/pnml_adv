@@ -1,6 +1,6 @@
 {
     "exp_type": "cifar_adversarial",
-    "batch_size": 100,
+    "batch_size": 200,
     "num_workers": 4,
     "freeze_layer": 0,
     "adv_attack_test": {
@@ -12,7 +12,7 @@
         "attack_type": "eot",
         "epsilon": 0.031,
         "pgd_iter": 200,
-        "EOT_num_of_iter_to_avg": 9999,
+        "EOT_num_of_iter_to_avg": 0,
         "pgd_step": 0.007,
         "pgd_test_restart_num": 5,
         "beta": 0.0,

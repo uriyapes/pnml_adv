@@ -77,7 +77,7 @@ class PnmlModel(ModelTemplate):
 
     def forward(self, x, get_logits=False):
         batch_size = x.shape[0]
-        genie_prob = torch.zeros([batch_size, self.num_classes], requires_grad=True).to(x.device)
+        genie_prob = torch.zeros([batch_size, self.num_classes], requires_grad=False).to(x.device)
         x_refined = self.refine.create_refined_samples(x)  #TODO: if pnml_model_keep_grad=False, detach the refined samples inside the create_adversarial_sample method
         x_refined_flat = torch.flatten(x_refined, start_dim=0, end_dim=1)
         with torch.set_grad_enabled(self.pnml_model_keep_grad):
@@ -92,8 +92,8 @@ class PnmlModel(ModelTemplate):
                 self.genie_prob = None
                 return genie_prob
             pnml_prob = genie_prob / genie_prob.sum(dim=1, keepdim=True)
-            pnml_prob_sum = genie_prob.sum(dim=1, keepdim=False)
-            self.regularization = torch.log(pnml_prob_sum)  # This is the regret, each sample in the batch has it's own regret.
+            # pnml_prob_sum = genie_prob.sum(dim=1, keepdim=False)
+            # self.regularization = torch.log(pnml_prob_sum)  # This is the regret, each sample in the batch has it's own regret.  TODO: add contidion to detach it
             self.genie_prob = genie_prob.detach()
         return pnml_prob
 

@@ -1,3 +1,4 @@
+import time
 from typing import Union, Callable, Tuple
 from functools import reduce
 from collections import deque
@@ -88,24 +89,30 @@ def fgsm_all_labels(model: Module,
     # if x.grad is not None:
     #     x.grad.detach_()
     #     x.grad.zero_()
+    # t0 = time.time()
     batch_size = x.shape[0]
     labels_mat = torch.arange(0, class_num, dtype=torch.long, device=x.device).unsqueeze(dim=0).expand(batch_size, class_num)
 
-    x_fgsm = x.clone().to(x.device)
+    x_fgsm = x.clone()
     x_fgsm.retain_grad()  # backward don't calculate grad for non-leaf unless retain_grad() is invoked (in addition to requires_grad)
     if x_fgsm.requires_grad is False:
         x_fgsm.requires_grad = True
 
+    # print("fgsm_all_labels time passed 1 initialization: {}".format(time.time() - t0))
+
     prediction = model(x_fgsm)
+    # t1 = time.time()
     pred_mat = prediction.unsqueeze(dim=2).repeat(1, 1, class_num)
     # loss = loss_fn(pred_mat, labels_mat).mean(dim=0)
     # # loss.backward(retain_graph=retain_graph)
     x_adv = torch.zeros_like(x_fgsm, device=x.device).unsqueeze(dim=0).repeat([class_num] + [1 for i in range(x_fgsm.dim())])
+    # print("fgsm_all_labels time passed 2 initialization: {}".format(time.time() - t1))
     for i in range(class_num):
         loss = loss_fn(pred_mat[:,:,i], labels_mat[:,i]).mean(dim=0)
         x_adv_grad = torch.autograd.grad(loss, x_fgsm, create_graph=False, retain_graph=True)[0]
         x_grad_sign = torch.sign(x_adv_grad).detach()
         x_adv[i] = (x - x_grad_sign * eps).clamp(*clamp)  #.detach()
+    # print("fgsm_all_labels TOTAL time: {}".format(time.time() - t0))
     return x_adv
 
 
