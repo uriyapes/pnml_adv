@@ -4,7 +4,7 @@ windows:
 #    layout: even-vertical
 #    shell_command_before:
 #      - cd /home/ubuntu/Projects/pnml_adv2
-#      - conda activate pnml_adv_3
+#      - conda activate pnml_adv3
 #    panes:
 #      - shell_command:
 #        - CUDA_VISIBLE_DEVICES=0 python ./src/main.py -t mnist_adversarial -p ./src/parameters/mnist_params_take_best_bpda.json -o results/MNIST/Adaptive/mnist_params_take_best_bpda
@@ -20,7 +20,7 @@ windows:
     layout: even-vertical
     shell_command_before:
       - cd /home/ubuntu/Projects/pnml_adv2
-      - conda activate pnml_adv_3
+      - conda activate pnml_adv3
     panes:
       - shell_command:
         - CUDA_VISIBLE_DEVICES=3 python ./src/main.py -t cifar_adversarial -p ./src/parameters/cifar_params_eot_bpda.json -f 0 -l 2499 -o results/cifar/Adaptive/cifar_params_eot_bpda_0
