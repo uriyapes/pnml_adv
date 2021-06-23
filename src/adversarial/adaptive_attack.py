@@ -82,10 +82,10 @@ class EotPgdAttack(BaseAttack):
         self._init_record_stats_buffers(x)
 
         for i in range(self.attack_params["pgd_iter"] + 1):
-            t0 = time.time()
+            # t0 = time.time()
             x_adv = self._pgd_iteration(x, x_adv, i, y_target, y)
-            print("_iterative_gradient iter: {}, time passed: {}, max CUDA memory: {}".format(i, time.time() - t0,
-                                                                             torch.cuda.max_memory_allocated() / 2 ** 20))
+            # print("_iterative_gradient iter: {}, time passed: {}, max CUDA memory: {}".format(i, time.time() - t0,
+            #                                                                  torch.cuda.max_memory_allocated() / 2 ** 20))
 
         #  This is done so model with refinement could do backprop
         # x_adv = x_adv.detach()

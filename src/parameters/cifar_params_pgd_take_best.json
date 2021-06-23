@@ -1,6 +1,6 @@
 {
     "exp_type": "cifar_adversarial",
-    "batch_size": 100,
+    "batch_size": 150,
     "num_workers": 4,
     "freeze_layer": 0,
     "adv_attack_test": {

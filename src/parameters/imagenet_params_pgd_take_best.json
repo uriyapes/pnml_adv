@@ -1,0 +1,45 @@
+{
+    "exp_type": "imagenet_adversarial",
+    "batch_size": 5,
+    "num_workers": 4,
+    "freeze_layer": 0,
+    "num_classes": 100,
+    "adv_attack_test": {
+        "_comment": "===== IMAGE-NET ADV. TESTING =====",
+        "save_adv_sample": true,
+        "save_original_sample": true,
+        "white_box": true,m
+        "black_box_adv_path": "./output/imagenet_adversarial_results_20200602_125324/adversarials.t",
+        "attack_type": "eot",
+        "epsilon": 0.03137254901960784,
+        "pgd_iter": 50,
+        "EOT_num_of_iter_to_avg": 0,
+        "pgd_step": 0.0039215,
+        "pgd_test_restart_num": 10,
+        "beta": 0.0,
+        "test_start_idx": 0,
+        "test_end_idx": 199,
+        "idx_step_size": 1
+    },
+    "use_same_model_for_attack_and_eval": false,
+    "model_to_attack": {
+        "_comment": "===== IMAGE-NET ADV. MODEL =====",
+        "model_arch": "resnet50",
+        "ckpt_path": "./trained_models/downloaded_models/imagenet_model_weights_4px.pth.tar",
+        "pnml_active": false
+    },
+    "model_to_eval": {
+        "_comment": "===== IMAGE-NET ADV. MODEL =====",
+        "model_arch": "resnet50",
+        "ckpt_path": "./trained_models/downloaded_models/imagenet_model_weights_4px.pth.tar",
+        "pnml_active": true
+    },
+    "fit_to_sample": {
+        "_comment": "===== IMAGE-NET PNML=====",
+        "attack_type": "fgsm",
+        "epsilon": 0.01176,
+        "pgd_iter": 1,
+        "pgd_step":  0.01176,
+        "pgd_test_restart_num": 0
+    }
+}
