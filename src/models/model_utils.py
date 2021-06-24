@@ -28,41 +28,32 @@ class ModelTemplate(nn.Module, ABC):
     def get_genie_prob(self):
         return None
 
-    def eval_batch(self, data, labels, enable_grad: bool = True, loss_type='logit_diff'):
+    def eval_batch(self, data, labels, enable_grad: bool = True, loss_type = 'nll'):
         """
         :param data: the data to evaluate
         :param labels: the labels of the data
         :param enable_grad: Should grad be enabled for later differentiation
         :param model_output_type: "logits" if model output logits or "prob"
-        :param loss_type: 'nll' or 'logit_diff'
+        :param loss_func: The loss function used to calculate the loss
         :return: batch loss, probability and label prediction.
         """
-
         self.eval()
         with torch.set_grad_enabled(enable_grad):
-            # data, labels = TorchUtils.to_device(data), TorchUtils.to_device(labels)
-            output = self.__call__(data)
-            if not self.pnml_model:  # Output is logits
-                prob = torch.softmax(output, 1)
-            else:  # Output is probability
-                prob = output
+            logits = self.__call__(data)
+            prob = torch.softmax(logits, 1)
             if loss_type == 'nll':
                 loss_func = torch.nn.NLLLoss(reduction='none')
-                if not self.pnml_model:  # Output is logits
-                    loss = loss_func(torch.log_softmax(output, 1), labels)  # log soft-max is more numerically stable
-                else:  # Output is probability
-                    loss = loss_func(torch.log(output), labels)
-            # _, predicted_label = torch.max(output.data, 1)
+                loss = loss_func(torch.log_softmax(logits, 1), labels)  # log soft-max is more numerically stable
             elif loss_type == 'logit_diff':
-                label_logits = torch.zeros(data.shape[0])
-                idx = torch.arange(data.shape[0])
-                label_logits[:] = output[idx, labels]
-                output[idx, labels] = -1*float('inf')
-                max_wrong_logit = output.max(dim=1)[0]
-                output[idx, labels] = label_logits[:]
-                loss = label_logits - max_wrong_logit
+                label_logits = torch.zeros(data.shape[0], device=TorchUtils.get_device())
+                idx = torch.arange(data.shape[0], device=TorchUtils.get_device())
+                label_logits[:] = logits[idx, labels]
+                logits[idx, labels] = -1 * float('inf')
+                max_wrong_logit = logits.max(dim=1)[0]
+                logits[idx, labels] = label_logits[:]
+                loss = -1*(label_logits - max_wrong_logit)
 
-        return loss, prob, self.get_genie_prob()
+        return loss, prob.detach(), None
 
 
 def load_pretrained_model(model_base, model_params_path):

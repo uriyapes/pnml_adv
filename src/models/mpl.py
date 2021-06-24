@@ -136,7 +136,6 @@ class PnmlModel(ModelTemplate):
         :param loss_type: 'nll' or 'logit_diff'
         :return: batch loss, probability and label prediction.
         """
-
         self.eval()
 
         if loss_type == 'nll':
@@ -146,13 +145,13 @@ class PnmlModel(ModelTemplate):
             genie_prob = self.get_genie_prob()
         elif loss_type == 'logit_diff':
             genie_prob = self.__call__(data, get_logits=True)
-            label_logits = torch.zeros(data.shape[0])
-            idx = torch.arange(data.shape[0])
+            label_logits = torch.zeros(data.shape[0], device=TorchUtils.get_device())
+            idx = torch.arange(data.shape[0], device=TorchUtils.get_device())
             label_logits[:] = genie_prob[idx, labels]
             genie_prob[idx, labels] = -1 * float('inf')
             max_wrong_logit = genie_prob.max(dim=1)[0]
             genie_prob[idx, labels] = label_logits[:]
-            loss = label_logits - max_wrong_logit
+            loss = -1*(label_logits - max_wrong_logit)
             prob = genie_prob / genie_prob.sum(dim=1, keepdim=True)
 
         return loss, prob.detach(), genie_prob.detach()

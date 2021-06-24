@@ -156,7 +156,7 @@ class EotPgdAttack(BaseAttack):
 
     def _init_record_stats_buffers(self, x):
         self.x_adv_best = torch.zeros_like(x).detach()
-        self.loss_best = -1 * torch.ones(x.shape[0], dtype=torch.float32,device=x.device)  # Init the loss to -1 so in first iteration the loss_best and x_adv_best will be updated
+        self.loss_best = -np.inf * torch.ones(x.shape[0], dtype=torch.float32,device=x.device)  # Init the loss to -1 so in first iteration the loss_best and x_adv_best will be updated
         self.loss_per_iter = torch.zeros([self.attack_params["pgd_iter"] + 1, x.shape[0]], dtype=torch.float32, device=x.device)
         if self.attack_params["perform_EOT"]:
             self._init_record_EOT_buffers(x)
