@@ -11,6 +11,7 @@ from utilities import TorchUtils
 class EotPgdAttack(BaseAttack):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.loss_type = 'logit_diff'  # Or nll
         if self.attack_params.get("beta") is None:
             self.attack_params["beta"] = 0.0
         if self.attack_params["pgd_test_restart_num"] == 0:
@@ -104,14 +105,14 @@ class EotPgdAttack(BaseAttack):
         x_adv.detach_()
         x_adv = x_adv.requires_grad_(True)
         # prediction = self.model_to_attack.calc_log_prob(x_adv)
-        # loss = self.loss_fn(prediction, y_target if self._is_targeted else y)
-        loss = self._get_model_loss(self.model_to_attack, x_adv, y, y_target)
+        # loss = self._get_model_loss(self.model_to_attack, x_adv, y, y_target)
+        loss, _, _ = self.model_to_attack.eval_batch(x_adv, y_target if self._is_targeted else y, enable_grad=True)
         loss_mean = loss.mean() - self.attack_params["beta"] * self.model_to_attack.regularization.mean()
 
         # Record x_adv and corresponding loss:
         if self.model_to_eval is not None:
             loss_to_record, _, _ = self.model_to_eval.eval_batch(x_adv, y_target if self._is_targeted else y,
-                                                                 enable_grad=self.model_to_eval.pnml_model)
+                                                                 enable_grad=self.model_to_eval.pnml_model)  # enable_grad=self.model_to_eval.pnml_model since pNML model uses gradients so with no_grad shouldn't work
         else:
             loss_to_record = loss.detach()
         self._record_stats(x_adv, i, loss_to_record)
@@ -178,6 +179,7 @@ class EotPgdAttack(BaseAttack):
 
     def _get_model_loss(self, model, x_adv, y, y_target):
         prediction_on_model_to_eval = model.calc_log_prob(x_adv)
-        return self.loss_fn(prediction_on_model_to_eval, y_target if self._is_targeted else y)
+        loss = self.loss_fn(prediction_on_model_to_eval, y_target if self._is_targeted else y)
+        return loss
 
 
