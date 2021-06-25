@@ -112,7 +112,7 @@ class EotPgdAttack(BaseAttack):
         # Record x_adv and corresponding loss:
         if self.model_to_eval is not None:
             loss_to_record, _, _ = self.model_to_eval.eval_batch(x_adv, y_target if self._is_targeted else y,
-                                                                 enable_grad=self.model_to_eval.pnml_model)  # enable_grad=self.model_to_eval.pnml_model since pNML model uses gradients so with no_grad shouldn't work
+                                                                 enable_grad=self.model_to_eval.pnml_model, loss_type = 'logit_diff')  # enable_grad=self.model_to_eval.pnml_model since pNML model uses gradients so with no_grad shouldn't work
         else:
             loss_to_record = loss.detach()
         self._record_stats(x_adv, i, loss_to_record)
